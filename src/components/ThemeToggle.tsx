@@ -1,12 +1,18 @@
 "use client"
 
-import { Moon, Sun, Monitor } from "lucide-react"
+import { Moon, Sun, Monitor, Smartphone } from "lucide-react"
 import { useTheme } from "@/src/styles/ThemeProvider"
 import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 export function ThemeToggle() {
-  const { mode, setMode, isDark } = useTheme()
+  const { mode, setMode, variant, setVariant, isDark } = useTheme()
 
   return (
     <DropdownMenu>
@@ -32,6 +38,17 @@ export function ThemeToggle() {
           <Monitor className="mr-2 h-4 w-4" />
           <span>System</span>
           {mode === "system" && <span className="ml-auto">✓</span>}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => setVariant("default")}>
+          <Monitor className="mr-2 h-4 w-4" />
+          <span>Default</span>
+          {variant === "default" && <span className="ml-auto">✓</span>}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setVariant("android")}>
+          <Smartphone className="mr-2 h-4 w-4" />
+          <span>Android</span>
+          {variant === "android" && <span className="ml-auto">✓</span>}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

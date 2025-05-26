@@ -4,7 +4,6 @@ import { Inter } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/src/styles/ThemeProvider"
 import { ThemeToggle } from "@/src/components/ThemeToggle"
-import { ColorSchemeSelector } from "@/src/components/ColorSchemeSelector"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -31,7 +30,6 @@ export default function RootLayout({
                     <h1 className="text-2xl font-bold text-foreground">Enterprise File Explorer</h1>
                   </div>
                   <div className="flex items-center space-x-4">
-                    <ColorSchemeSelector />
                     <ThemeToggle />
                     <span className="text-sm text-muted-foreground">v1.0.0</span>
                   </div>
