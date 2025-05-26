@@ -17,6 +17,8 @@ import { FilePathParser, type VisualizationOptions } from "../utils/FilePathPars
 import { ErrorBoundary } from "./ErrorBoundary"
 import { errorTracker } from "../services/ErrorTrackingService"
 import { safeToString, safeToNumber, safeToBoolean, safeGet, safeEquals } from "../utils/safe-conversions"
+import { useRouter } from "next/navigation"
+import { NavigationService } from "../services/NavigationService"
 
 interface FilePreviewProps {
   file: FileNode | null
@@ -35,6 +37,9 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ file, container }) => 
     sortOrder: "asc",
     showHidden: false,
   })
+
+  const router = useRouter()
+  const navigationService = new NavigationService(router)
 
   const theme = useMemo(() => {
     try {
@@ -409,6 +414,64 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ file, container }) => 
     }
   }
 
+  const downloadFile = async () => {
+    if (!file) return
+
+    try {
+      const fileId = safeToString(safeGet(file, "id"))
+      const fileName = safeToString(safeGet(file, "name", "download"))
+
+      // Log download attempt
+      const logger = container.resolve("ILoggingService")
+      logger.info("UI", "File download initiated", { fileId, fileName })
+
+      if (safeEquals(safeGet(file, "type"), "directory")) {
+        // For directories, use the export service
+        const imageExportService = container.resolve("ImageExportService")
+        const result = await imageExportService.exportFileTreeAsImage([file], {
+          width: 1200,
+          height: 800,
+          format: "png",
+          theme: selectedTheme,
+          backgroundColor: safeToString(safeGet(theme, "colors.background", "#ffffff")),
+          textColor: safeToString(safeGet(theme, "colors.textPrimary", "#000000")),
+        })
+
+        if (result && result.success) {
+          await imageExportService.downloadImage(result, `${fileName}-tree.png`)
+          logger.info("UI", "Directory exported as image successfully", { fileId, fileName })
+        } else {
+          throw new Error("Failed to export directory as image")
+        }
+      } else {
+        // For files, use the download API
+        const downloadUrl = navigationService.createDownloadUrl(fileId)
+
+        // Create a hidden anchor and trigger download
+        const link = document.createElement("a")
+        link.href = downloadUrl
+        link.download = fileName
+        link.target = "_blank"
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+
+        logger.info("UI", "File download link clicked", { fileId, fileName, url: downloadUrl })
+      }
+    } catch (err) {
+      errorTracker.captureError(err, {
+        type: "system",
+        severity: "medium",
+        component: "FilePreview",
+        action: "download_file",
+        metadata: {
+          filePath: safeToString(safeGet(file, "path")),
+          fileName: safeToString(safeGet(file, "name")),
+        },
+      })
+    }
+  }
+
   const exportPreview = async () => {
     try {
       if (!file) return
@@ -486,8 +549,12 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ file, container }) => 
               </Badge>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={exportPreview}>
+              <Button variant="ghost" size="sm" onClick={downloadFile}>
                 <Download className="h-4 w-4 mr-1" />
+                Download
+              </Button>
+              <Button variant="ghost" size="sm" onClick={exportPreview}>
+                <Eye className="h-4 w-4 mr-1" />
                 Export
               </Button>
             </div>
@@ -643,6 +710,7 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ file, container }) => 
                         <img
                           src={
                             safeToString(safeGet(file, "previewUrl", safeGet(file, "thumbnailUrl", ""))) ||
+                            "/placeholder.svg" ||
                             "/placeholder.svg"
                           }
                           alt={fileName}
@@ -669,6 +737,7 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ file, container }) => 
                     <img
                       src={
                         safeToString(safeGet(file, "previewUrl", safeGet(file, "thumbnailUrl", ""))) ||
+                        "/placeholder.svg" ||
                         "/placeholder.svg"
                       }
                       alt={fileName}
