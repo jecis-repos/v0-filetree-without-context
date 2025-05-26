@@ -1,9 +1,9 @@
-# filetree without context
+# Fileexplorer
 
 *Automatically synced with your [v0.dev](https://v0.dev) deployments*
 
-[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/jekabs-8572s-projects/v0-filetree-without-context)
-[![Built with v0](https://img.shields.io/badge/Built%20with-v0.dev-black?style=for-the-badge)](https://v0.dev/chat/projects/bIEtcdUu9oU)
+[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/jekabs-8572s-projects/v0-fileexplorer)
+[![Built with v0](https://img.shields.io/badge/Built%20with-v0.dev-black?style=for-the-badge)](https://v0.dev/chat/projects/nb7Ac3rfxww)
 
 ## Overview
 
@@ -14,13 +14,13 @@ Any changes you make to your deployed app will be automatically pushed to this r
 
 Your project is live at:
 
-**[https://vercel.com/jekabs-8572s-projects/v0-filetree-without-context](https://vercel.com/jekabs-8572s-projects/v0-filetree-without-context)**
+**[https://vercel.com/jekabs-8572s-projects/v0-fileexplorer](https://vercel.com/jekabs-8572s-projects/v0-fileexplorer)**
 
 ## Build your app
 
 Continue building your app on:
 
-**[https://v0.dev/chat/projects/bIEtcdUu9oU](https://v0.dev/chat/projects/bIEtcdUu9oU)**
+**[https://v0.dev/chat/projects/nb7Ac3rfxww](https://v0.dev/chat/projects/nb7Ac3rfxww)**
 
 ## How It Works
 
