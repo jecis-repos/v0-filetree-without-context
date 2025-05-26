@@ -99,13 +99,15 @@ export class DIContainer {
 
     // Register implementations
     try {
-      const { WasmFileSystemProvider } = require("../providers/WasmFileSystemProvider")
-      const { MemoryFileSystemProvider } = require("../providers/MemoryFileSystemProvider")
-      const { CacheService } = require("../services/CacheService")
-      const { FileSystemCalculator } = require("../services/FileSystemCalculator")
-      const { PerformanceMonitor } = require("../services/PerformanceMonitor")
-      const { LoggingService } = require("../services/LoggingService")
+      // Import all required implementations
+      const WasmFileSystemProvider = require("../providers/WasmFileSystemProvider").WasmFileSystemProvider
+      const MemoryFileSystemProvider = require("../providers/MemoryFileSystemProvider").MemoryFileSystemProvider
+      const CacheService = require("../services/CacheService").CacheService
+      const FileSystemCalculator = require("../services/FileSystemCalculator").FileSystemCalculator
+      const PerformanceMonitor = require("../services/PerformanceMonitor").PerformanceMonitor
+      const LoggingService = require("../services/LoggingService").LoggingService
 
+      // Register all implementations
       implementations.WasmFileSystemProvider = WasmFileSystemProvider
       implementations.MemoryFileSystemProvider = MemoryFileSystemProvider
       implementations.CacheService = CacheService
@@ -122,6 +124,11 @@ export class DIContainer {
     }
 
     return ImplementationClass
+  }
+
+  // Check if a service is registered
+  hasService(serviceName: string): boolean {
+    return this.services.has(serviceName) || this.instances.has(serviceName) || this.factories.has(serviceName)
   }
 
   getRegisteredServices(): string[] {

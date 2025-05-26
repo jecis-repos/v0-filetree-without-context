@@ -198,21 +198,70 @@ export const FileTreeExplorer: React.FC<FileTreeExplorerProps> = ({ container })
     // Update the DI container to use the new provider
     try {
       if (providerType === "WASM") {
-        const wasmProvider = container.resolve("WasmFileSystemProvider")
-        container.registerInstance("IFileSystemProvider", wasmProvider)
+        // Check if WasmFileSystemProvider is available
+        if (!container.hasService("WasmFileSystemProvider")) {
+          // If not available, dynamically import and register it
+          try {
+            const { WasmFileSystemProvider } = await import("../providers/WasmFileSystemProvider")
+            const performanceMonitor = container.resolve("IPerformanceMonitor")
+            const wasmProvider = new WasmFileSystemProvider(performanceMonitor)
+            container.registerInstance("WasmFileSystemProvider", wasmProvider)
+          } catch (importError) {
+            logger.error("UI", "Failed to import WasmFileSystemProvider", { error: importError.message })
+            throw new Error(`Failed to import WasmFileSystemProvider: ${importError.message}`)
+          }
+        }
+
+        // Now try to resolve it
+        try {
+          const wasmProvider = container.resolve("WasmFileSystemProvider")
+          container.registerInstance("IFileSystemProvider", wasmProvider)
+          logger.info("UI", "Switched to WASM provider successfully")
+        } catch (resolveError) {
+          logger.error("UI", "Failed to resolve WasmFileSystemProvider", { error: resolveError.message })
+          // Fallback to Memory provider
+          switchToMemoryProvider(logger)
+        }
+      } else if (providerType === "IndexedDB") {
+        // Similar pattern for IndexedDB provider
+        logger.warn("UI", "IndexedDB provider not fully implemented, falling back to Memory provider")
+        switchToMemoryProvider(logger)
       } else {
         // Default to Memory provider
-        const memoryProvider =
-          container.resolve("MemoryFileSystemProvider") ||
-          new (await import("../providers/MemoryFileSystemProvider")).MemoryFileSystemProvider(
-            container.resolve("IPerformanceMonitor"),
-          )
-        container.registerInstance("IFileSystemProvider", memoryProvider)
+        switchToMemoryProvider(logger)
       }
-
-      logger.info("UI", "Provider switched successfully", { provider: providerType })
     } catch (error) {
       logger.error("UI", "Failed to switch provider", { provider: providerType, error: error.message })
+      // Always fallback to memory provider on error
+      switchToMemoryProvider(logger)
+    }
+  }
+
+  // Helper function to switch to memory provider
+  const switchToMemoryProvider = async (logger) => {
+    try {
+      // Check if MemoryFileSystemProvider is available
+      if (!container.hasService("MemoryFileSystemProvider")) {
+        // If not available, dynamically import and register it
+        try {
+          const { MemoryFileSystemProvider } = await import("../providers/MemoryFileSystemProvider")
+          const performanceMonitor = container.resolve("IPerformanceMonitor")
+          const memoryProvider = new MemoryFileSystemProvider(performanceMonitor)
+          container.registerInstance("MemoryFileSystemProvider", memoryProvider)
+        } catch (importError) {
+          logger.error("UI", "Failed to import MemoryFileSystemProvider", { error: importError.message })
+          throw new Error(`Failed to import MemoryFileSystemProvider: ${importError.message}`)
+        }
+      }
+
+      // Now try to resolve it
+      const memoryProvider = container.resolve("MemoryFileSystemProvider")
+      container.registerInstance("IFileSystemProvider", memoryProvider)
+      setCurrentProvider("Memory")
+      logger.info("UI", "Switched to Memory provider successfully")
+    } catch (error) {
+      logger.error("UI", "Failed to switch to Memory provider", { error: error.message })
+      // At this point, we're out of options
     }
   }
 

@@ -37,6 +37,14 @@ export default function Home() {
         newContainer.registerInstance("IFileSystemCalculator", fileSystemCalculator)
         newContainer.registerInstance("IFileSystemProvider", memoryProvider)
 
+        // Try to register WASM provider if available
+        try {
+          const { WasmFileSystemProvider } = require("../src/providers/WasmFileSystemProvider")
+          newContainer.registerInstance("WasmFileSystemProvider", new WasmFileSystemProvider(performanceMonitor))
+        } catch (error) {
+          console.warn("WASM provider not available:", error)
+        }
+
         // Load configuration for any additional services
         newContainer.loadConfiguration(diConfig)
 
