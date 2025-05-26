@@ -6,7 +6,7 @@ export class FileImporter implements IFileImporter {
   constructor(private performanceMonitor: IPerformanceMonitor) {}
 
   async importFromFiles(files: FileList, options?: ImportOptions): Promise<ImportResult> {
-    const startTime = performance.now()
+    const timerId = this.performanceMonitor.startTimer("file_import")
     const nodes: FileNode[] = []
     const errors: string[] = []
 
@@ -21,8 +21,7 @@ export class FileImporter implements IFileImporter {
         }
       }
 
-      const endTime = performance.now()
-      this.performanceMonitor.endTimer("file_import", true, { duration: endTime - startTime })
+      this.performanceMonitor.endTimer(timerId, true)
 
       return {
         success: errors.length === 0,
@@ -32,6 +31,7 @@ export class FileImporter implements IFileImporter {
         importedFiles: nodes.length,
       }
     } catch (error) {
+      this.performanceMonitor.endTimer(timerId, false, { error: error.message || "Unknown error" })
       return {
         success: false,
         nodes: [],
@@ -43,7 +43,7 @@ export class FileImporter implements IFileImporter {
   }
 
   async importFromUrl(url: string, options?: ImportOptions): Promise<ImportResult> {
-    const startTime = performance.now()
+    const timerId = this.performanceMonitor.startTimer("url_import")
 
     try {
       // Validate URL
@@ -83,8 +83,7 @@ export class FileImporter implements IFileImporter {
       }
 
       const sanitizedData = this.sanitizeImportData(data)
-      const endTime = performance.now()
-      this.performanceMonitor.endTimer("url_import", true, { duration: endTime - startTime })
+      this.performanceMonitor.endTimer(timerId, true)
 
       return {
         success: true,
@@ -94,9 +93,7 @@ export class FileImporter implements IFileImporter {
         importedFiles: this.countFiles(sanitizedData),
       }
     } catch (error) {
-      const endTime = performance.now()
-      this.performanceMonitor.endTimer("url_import_error", false, {
-        duration: endTime - startTime,
+      this.performanceMonitor.endTimer(timerId, false, {
         error: error.message || "Unknown error during import",
       })
 
@@ -111,7 +108,7 @@ export class FileImporter implements IFileImporter {
   }
 
   async importFromLocalFile(file: File, options?: ImportOptions): Promise<ImportResult> {
-    const startTime = performance.now()
+    const timerId = this.performanceMonitor.startTimer("local_file_import")
 
     try {
       // Validate file type
@@ -135,8 +132,7 @@ export class FileImporter implements IFileImporter {
       }
 
       const sanitizedData = this.sanitizeImportData(data)
-      const endTime = performance.now()
-      this.performanceMonitor.endTimer("local_file_import", true, { duration: endTime - startTime })
+      this.performanceMonitor.endTimer(timerId, true)
 
       return {
         success: true,
@@ -146,9 +142,7 @@ export class FileImporter implements IFileImporter {
         importedFiles: this.countFiles(sanitizedData),
       }
     } catch (error) {
-      const endTime = performance.now()
-      this.performanceMonitor.endTimer("local_file_import_error", false, {
-        duration: endTime - startTime,
+      this.performanceMonitor.endTimer(timerId, false, {
         error: error.message || "Unknown error during import",
       })
 
@@ -166,7 +160,7 @@ export class FileImporter implements IFileImporter {
     directoryHandle: FileSystemDirectoryHandle,
     options?: ImportOptions,
   ): Promise<ImportResult> {
-    const startTime = performance.now()
+    const timerId = this.performanceMonitor.startTimer("directory_import")
     const nodes: FileNode[] = []
     const errors: string[] = []
 
@@ -174,8 +168,7 @@ export class FileImporter implements IFileImporter {
       const rootNode = await this.directoryToNode(directoryHandle, options)
       nodes.push(rootNode)
 
-      const endTime = performance.now()
-      this.performanceMonitor.endTimer("directory_import", true, { duration: endTime - startTime })
+      this.performanceMonitor.endTimer(timerId, true)
 
       return {
         success: true,
@@ -185,6 +178,9 @@ export class FileImporter implements IFileImporter {
         importedFiles: this.countFiles(nodes),
       }
     } catch (error) {
+      this.performanceMonitor.endTimer(timerId, false, {
+        error: error.message || "Unknown error during directory import",
+      })
       return {
         success: false,
         nodes: [],
@@ -196,7 +192,7 @@ export class FileImporter implements IFileImporter {
   }
 
   async importFromJSON(jsonData: string, options?: ImportOptions): Promise<ImportResult> {
-    const startTime = performance.now()
+    const timerId = this.performanceMonitor.startTimer("json_import")
 
     try {
       let data
@@ -211,8 +207,7 @@ export class FileImporter implements IFileImporter {
       // Validate and convert to FileNode format
       const validatedNodes = nodes.map((node) => this.validateNode(node))
 
-      const endTime = performance.now()
-      this.performanceMonitor.endTimer("json_import", true, { duration: endTime - startTime })
+      this.performanceMonitor.endTimer(timerId, true)
 
       return {
         success: true,
@@ -222,6 +217,9 @@ export class FileImporter implements IFileImporter {
         importedFiles: this.countFiles(validatedNodes),
       }
     } catch (error) {
+      this.performanceMonitor.endTimer(timerId, false, {
+        error: error.message || "Unknown error during JSON import",
+      })
       return {
         success: false,
         nodes: [],
@@ -563,4 +561,93 @@ export class FileImporter implements IFileImporter {
       css: 1536,
       png: 51200,
       jpg: 76800,
-      jpeg: 76800,\
+      jpeg: 76800,
+      gif: 30720,
+      svg: 10240,
+      pdf: 102400,
+      doc: 51200,
+      docx: 51200,
+      xls: 51200,
+      xlsx: 51200,
+      ppt: 102400,
+      pptx: 102400,
+      zip: 204800,
+      rar: 204800,
+      tar: 204800,
+      gz: 204800,
+    }
+    return sizeEstimates[extension || ""] || 1024
+  }
+
+  private getMimeTypeFromFileName(fileName: string): string {
+    const extension = this.getFileExtension(fileName)
+    const mimeTypes: Record<string, string> = {
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      png: "image/png",
+      gif: "image/gif",
+      svg: "image/svg+xml",
+      webp: "image/webp",
+      txt: "text/plain",
+      md: "text/markdown",
+      js: "application/javascript",
+      ts: "application/typescript",
+      json: "application/json",
+      html: "text/html",
+      css: "text/css",
+      pdf: "application/pdf",
+      doc: "application/msword",
+      docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      xls: "application/vnd.ms-excel",
+      xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      ppt: "application/vnd.ms-powerpoint",
+      pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      zip: "application/zip",
+      rar: "application/x-rar-compressed",
+      tar: "application/x-tar",
+      gz: "application/gzip",
+    }
+    return mimeTypes[extension || ""] || "application/octet-stream"
+  }
+
+  private getFileExtension(fileName: string): string | null {
+    if (!fileName || typeof fileName !== "string") return null
+    const parts = fileName.split(".")
+    return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : null
+  }
+
+  private generatePlaceholderThumbnail(fileName: string): string {
+    const extension = this.getFileExtension(fileName) || ""
+    return `/placeholder.svg?height=100&width=100&query=image+file+${extension}`
+  }
+
+  private sanitizeString(str: string): string {
+    if (typeof str !== "string") return "Unknown"
+    return str.trim().replace(/[<>]/g, "")
+  }
+
+  private sanitizePath(path: string): string {
+    if (typeof path !== "string") return "/"
+
+    let sanitized = path.trim().replace(/\\/g, "/")
+    sanitized = sanitized.replace(/\.\.\//g, "")
+    if (!sanitized.startsWith("/")) {
+      sanitized = "/" + sanitized
+    }
+    sanitized = sanitized.replace(/\/+/g, "/")
+    return sanitized
+  }
+
+  private isValidUrl(url: string): boolean {
+    try {
+      new URL(url)
+      return true
+    } catch (e) {
+      return false
+    }
+  }
+
+  private generateId(): string {
+    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+  }
+}
