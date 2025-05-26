@@ -1,14 +1,22 @@
 import type { FileNode } from "./IFileSystemProvider"
 
+export interface ImportOptions {
+  includeContent?: boolean
+  maxFileSize?: number
+  allowedExtensions?: string[]
+  preserveStructure?: boolean
+}
+
 export interface ImportResult {
   success: boolean
-  data?: FileNode[]
-  error?: string
+  nodes: FileNode[]
+  errors: string[]
+  totalFiles: number
+  importedFiles: number
 }
 
 export interface IFileImporter {
-  importFromLocalFile(file: File): Promise<ImportResult>
-  importFromUrl(url: string): Promise<ImportResult>
-  validateImportData(data: any): boolean
-  sanitizeImportData(data: any): FileNode[]
+  importFromFiles(files: FileList, options?: ImportOptions): Promise<ImportResult>
+  importFromDirectory(directoryHandle: FileSystemDirectoryHandle, options?: ImportOptions): Promise<ImportResult>
+  importFromJSON(jsonData: string, options?: ImportOptions): Promise<ImportResult>
 }

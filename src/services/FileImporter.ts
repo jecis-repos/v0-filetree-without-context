@@ -1,12 +1,117 @@
-import type { IFileImporter, ImportResult } from "../interfaces/IFileImporter"
+import type { IFileImporter, ImportOptions, ImportResult } from "../interfaces/IFileImporter"
 import type { FileNode } from "../interfaces/IFileSystemProvider"
 import type { IPerformanceMonitor } from "../interfaces/IPerformanceMonitor"
 
 export class FileImporter implements IFileImporter {
-  constructor(private performanceMonitor?: IPerformanceMonitor) {}
+  constructor(private performanceMonitor: IPerformanceMonitor) {}
 
-  async importFromLocalFile(file: File): Promise<ImportResult> {
-    const timerId = this.performanceMonitor?.startTimer("import_local_file")
+  async importFromFiles(files: FileList, options?: ImportOptions): Promise<ImportResult> {
+    const startTime = performance.now()
+    const nodes: FileNode[] = []
+    const errors: string[] = []
+
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        try {
+          const node = await this.fileToNode(file, options)
+          nodes.push(node)
+        } catch (error) {
+          errors.push(`Failed to import ${file.name}: ${error.message || "Unknown error"}`)
+        }
+      }
+
+      const endTime = performance.now()
+      this.performanceMonitor.endTimer("file_import", true, { duration: endTime - startTime })
+
+      return {
+        success: errors.length === 0,
+        nodes,
+        errors,
+        totalFiles: files.length,
+        importedFiles: nodes.length,
+      }
+    } catch (error) {
+      return {
+        success: false,
+        nodes: [],
+        errors: [error.message || "Unknown error"],
+        totalFiles: files.length,
+        importedFiles: 0,
+      }
+    }
+  }
+
+  async importFromUrl(url: string, options?: ImportOptions): Promise<ImportResult> {
+    const startTime = performance.now()
+
+    try {
+      // Validate URL
+      if (!this.isValidUrl(url)) {
+        throw new Error("Invalid URL format")
+      }
+
+      // Fetch data from URL with proper error handling
+      let response
+      try {
+        response = await fetch(url, {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+          },
+          cache: "no-cache",
+        })
+      } catch (error) {
+        throw new Error(`Network error: ${error.message || "Failed to connect to server"}`)
+      }
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch data: ${response.status} ${response.statusText}`)
+      }
+
+      let data
+      try {
+        const text = await response.text()
+        data = JSON.parse(text)
+      } catch (error) {
+        throw new Error(`Invalid JSON format: ${error.message || "Could not parse response"}`)
+      }
+
+      // Validate and sanitize data
+      if (!this.validateImportData(data)) {
+        throw new Error("Invalid file structure in the imported data")
+      }
+
+      const sanitizedData = this.sanitizeImportData(data)
+      const endTime = performance.now()
+      this.performanceMonitor.endTimer("url_import", true, { duration: endTime - startTime })
+
+      return {
+        success: true,
+        nodes: sanitizedData,
+        errors: [],
+        totalFiles: this.countFiles(sanitizedData),
+        importedFiles: this.countFiles(sanitizedData),
+      }
+    } catch (error) {
+      const endTime = performance.now()
+      this.performanceMonitor.endTimer("url_import_error", false, {
+        duration: endTime - startTime,
+        error: error.message || "Unknown error during import",
+      })
+
+      return {
+        success: false,
+        nodes: [],
+        errors: [error.message || "Unknown error during import"],
+        totalFiles: 0,
+        importedFiles: 0,
+      }
+    }
+  }
+
+  async importFromLocalFile(file: File, options?: ImportOptions): Promise<ImportResult> {
+    const startTime = performance.now()
 
     try {
       // Validate file type
@@ -21,80 +126,119 @@ export class FileImporter implements IFileImporter {
       try {
         data = JSON.parse(content)
       } catch (error) {
-        throw new Error("Invalid JSON format")
+        throw new Error(`Invalid JSON format: ${error.message || "Could not parse file"}`)
       }
 
       // Validate and sanitize data
       if (!this.validateImportData(data)) {
-        throw new Error("Invalid file structure")
+        throw new Error("Invalid file structure in the imported data")
       }
 
       const sanitizedData = this.sanitizeImportData(data)
-      this.performanceMonitor?.endTimer(timerId!, true)
+      const endTime = performance.now()
+      this.performanceMonitor.endTimer("local_file_import", true, { duration: endTime - startTime })
 
       return {
         success: true,
-        data: sanitizedData,
+        nodes: sanitizedData,
+        errors: [],
+        totalFiles: this.countFiles(sanitizedData),
+        importedFiles: this.countFiles(sanitizedData),
       }
     } catch (error) {
-      this.performanceMonitor?.endTimer(timerId!, false, { error: error.message })
+      const endTime = performance.now()
+      this.performanceMonitor.endTimer("local_file_import_error", false, {
+        duration: endTime - startTime,
+        error: error.message || "Unknown error during import",
+      })
+
       return {
         success: false,
-        error: error.message,
+        nodes: [],
+        errors: [error.message || "Unknown error during import"],
+        totalFiles: 0,
+        importedFiles: 0,
       }
     }
   }
 
-  async importFromUrl(url: string): Promise<ImportResult> {
-    const timerId = this.performanceMonitor?.startTimer("import_url")
+  async importFromDirectory(
+    directoryHandle: FileSystemDirectoryHandle,
+    options?: ImportOptions,
+  ): Promise<ImportResult> {
+    const startTime = performance.now()
+    const nodes: FileNode[] = []
+    const errors: string[] = []
 
     try {
-      // Validate URL
-      if (!this.isValidUrl(url)) {
-        throw new Error("Invalid URL format")
-      }
+      const rootNode = await this.directoryToNode(directoryHandle, options)
+      nodes.push(rootNode)
 
-      // Fetch data from URL
-      const response = await fetch(url)
-      if (!response.ok) {
-        throw new Error(`Failed to fetch data: ${response.statusText}`)
-      }
-
-      let data
-      try {
-        data = await response.json()
-      } catch (error) {
-        throw new Error("Invalid JSON format")
-      }
-
-      // Validate and sanitize data
-      if (!this.validateImportData(data)) {
-        throw new Error("Invalid file structure")
-      }
-
-      const sanitizedData = this.sanitizeImportData(data)
-      this.performanceMonitor?.endTimer(timerId!, true)
+      const endTime = performance.now()
+      this.performanceMonitor.endTimer("directory_import", true, { duration: endTime - startTime })
 
       return {
         success: true,
-        data: sanitizedData,
+        nodes,
+        errors,
+        totalFiles: this.countFiles(nodes),
+        importedFiles: this.countFiles(nodes),
       }
     } catch (error) {
-      this.performanceMonitor?.endTimer(timerId!, false, { error: error.message })
       return {
         success: false,
-        error: error.message,
+        nodes: [],
+        errors: [error.message || "Unknown error during directory import"],
+        totalFiles: 0,
+        importedFiles: 0,
       }
     }
   }
 
-  validateImportData(data: any): boolean {
+  async importFromJSON(jsonData: string, options?: ImportOptions): Promise<ImportResult> {
+    const startTime = performance.now()
+
+    try {
+      let data
+      try {
+        data = JSON.parse(jsonData)
+      } catch (error) {
+        throw new Error(`Invalid JSON format: ${error.message || "Could not parse JSON string"}`)
+      }
+
+      const nodes = Array.isArray(data) ? data : [data]
+
+      // Validate and convert to FileNode format
+      const validatedNodes = nodes.map((node) => this.validateNode(node))
+
+      const endTime = performance.now()
+      this.performanceMonitor.endTimer("json_import", true, { duration: endTime - startTime })
+
+      return {
+        success: true,
+        nodes: validatedNodes,
+        errors: [],
+        totalFiles: this.countFiles(validatedNodes),
+        importedFiles: this.countFiles(validatedNodes),
+      }
+    } catch (error) {
+      return {
+        success: false,
+        nodes: [],
+        errors: [error.message || "Unknown error during JSON import"],
+        totalFiles: 0,
+        importedFiles: 0,
+      }
+    }
+  }
+
+  private validateImportData(data: any): boolean {
     // Check if data is an array (hierarchical structure)
     if (Array.isArray(data)) {
       return data.every((node) => this.isValidFileNode(node))
     }
 
-    // Check if data has the flat file paths format (like the example URL)
+    // Check if data has the flat file paths format
     if (data && typeof data === "object") {
       // Check for the specific format: { name: string, filepaths: string[] }
       if (typeof data.name === "string" && Array.isArray(data.filepaths)) {
@@ -110,8 +254,8 @@ export class FileImporter implements IFileImporter {
     return false
   }
 
-  sanitizeImportData(data: any): FileNode[] {
-    // Handle flat file paths format (like the example URL)
+  private sanitizeImportData(data: any): FileNode[] {
+    // Handle flat file paths format
     if (data && typeof data === "object" && data.filepaths && Array.isArray(data.filepaths)) {
       return this.convertFilePathsToTree(data.filepaths, data.name || "Imported")
     }
@@ -147,7 +291,7 @@ export class FileImporter implements IFileImporter {
     const sortedPaths = [...filepaths].sort()
 
     for (const filepath of sortedPaths) {
-      if (!filepath || filepath.trim() === "") continue
+      if (!filepath || typeof filepath !== "string" || filepath.trim() === "") continue
 
       // Normalize the path
       const normalizedPath = this.normalizePath(filepath)
@@ -216,183 +360,120 @@ export class FileImporter implements IFileImporter {
     return rootName ? [root] : root.children || []
   }
 
-  private normalizePath(path: string): string {
-    // Remove leading/trailing whitespace
-    let normalized = path.trim()
+  private async fileToNode(file: File, options?: ImportOptions): Promise<FileNode> {
+    const content = options?.includeContent ? await this.readFileContent(file) : undefined
 
-    // Convert backslashes to forward slashes
-    normalized = normalized.replace(/\\/g, "/")
-
-    // Ensure path starts with /
-    if (!normalized.startsWith("/")) {
-      normalized = "/" + normalized
+    return {
+      id: this.generateId(),
+      name: file.name,
+      type: "file",
+      path: `/${file.name}`,
+      size: file.size,
+      lastModified: new Date(file.lastModified),
+      mimeType: file.type || this.getMimeTypeFromFileName(file.name),
+      content,
     }
-
-    // Remove duplicate slashes
-    normalized = normalized.replace(/\/+/g, "/")
-
-    // Remove trailing slash (except for root)
-    if (normalized.length > 1 && normalized.endsWith("/")) {
-      normalized = normalized.slice(0, -1)
-    }
-
-    return normalized
   }
 
-  private estimateFileSize(fileName: string): number {
-    const extension = this.getFileExtension(fileName)
+  private async directoryToNode(
+    directoryHandle: FileSystemDirectoryHandle,
+    options?: ImportOptions,
+    basePath = "",
+  ): Promise<FileNode> {
+    const children: FileNode[] = []
+    const currentPath = basePath ? `${basePath}/${directoryHandle.name}` : `/${directoryHandle.name}`
 
-    // Estimate file sizes based on common file types
-    const sizeEstimates: Record<string, number> = {
-      // Text files
-      txt: 1024,
-      md: 2048,
-      json: 1536,
-      xml: 2048,
-      csv: 4096,
-
-      // Code files
-      js: 3072,
-      ts: 3584,
-      jsx: 4096,
-      tsx: 4608,
-      html: 2048,
-      css: 1536,
-      scss: 2048,
-      py: 2560,
-      java: 4096,
-      cpp: 3584,
-      c: 2560,
-      h: 1024,
-
-      // Config files
-      gitignore: 512,
-      editorconfig: 256,
-      prettierrc: 128,
-
-      // Package files
-      "package.json": 2048,
-      "yarn.lock": 51200, // Usually larger
-      "package-lock.json": 102400, // Usually much larger
-
-      // Documentation
-      readme: 4096,
-
-      // Images
-      png: 51200,
-      jpg: 76800,
-      jpeg: 76800,
-      gif: 25600,
-      svg: 2048,
-
-      // Archives
-      zip: 1048576,
-      tar: 2097152,
-      gz: 524288,
+    try {
+      for await (const [name, handle] of directoryHandle.entries()) {
+        if (handle.kind === "file") {
+          try {
+            const file = await handle.getFile()
+            const fileNode = await this.fileToNode(file, options)
+            fileNode.path = `${currentPath}/${name}`
+            children.push(fileNode)
+          } catch (error) {
+            console.error(`Error processing file ${name}:`, error)
+          }
+        } else if (handle.kind === "directory") {
+          try {
+            const dirNode = await this.directoryToNode(handle, options, currentPath)
+            children.push(dirNode)
+          } catch (error) {
+            console.error(`Error processing directory ${name}:`, error)
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`Error reading directory entries:`, error)
     }
 
-    // Check for specific filenames first
-    const lowerFileName = fileName.toLowerCase()
-    if (lowerFileName === "package.json") return sizeEstimates["package.json"]
-    if (lowerFileName === "yarn.lock") return sizeEstimates["yarn.lock"]
-    if (lowerFileName === "package-lock.json") return sizeEstimates["package-lock.json"]
-    if (lowerFileName.includes("readme")) return sizeEstimates.readme
-    if (lowerFileName === ".gitignore") return sizeEstimates.gitignore
-    if (lowerFileName === ".editorconfig") return sizeEstimates.editorconfig
-    if (lowerFileName === ".prettierrc") return sizeEstimates.prettierrc
+    return {
+      id: this.generateId(),
+      name: directoryHandle.name,
+      type: "directory",
+      path: currentPath,
+      lastModified: new Date(),
+      children,
+    }
+  }
 
-    // Use extension-based estimation
-    if (extension && sizeEstimates[extension]) {
-      return sizeEstimates[extension]
+  private async readFileContent(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = () => reject(new Error("Failed to read file content"))
+      reader.readAsText(file)
+    })
+  }
+
+  private validateNode(data: any): FileNode {
+    if (!data || typeof data !== "object") {
+      throw new Error("Invalid node data: must be an object")
     }
 
-    // Default size for unknown files
-    return 1024
-  }
-
-  private getMimeTypeFromFileName(fileName: string): string {
-    const extension = this.getFileExtension(fileName)
-    if (!extension) return "application/octet-stream"
-
-    const mimeTypes: Record<string, string> = {
-      // Images
-      jpg: "image/jpeg",
-      jpeg: "image/jpeg",
-      png: "image/png",
-      gif: "image/gif",
-      webp: "image/webp",
-      svg: "image/svg+xml",
-
-      // Documents
-      pdf: "application/pdf",
-      doc: "application/msword",
-      docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-
-      // Spreadsheets
-      xls: "application/vnd.ms-excel",
-      xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-
-      // Presentations
-      ppt: "application/vnd.ms-powerpoint",
-      pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-
-      // Text
-      txt: "text/plain",
-      md: "text/markdown",
-      csv: "text/csv",
-
-      // Code
-      html: "text/html",
-      css: "text/css",
-      js: "application/javascript",
-      jsx: "application/javascript",
-      ts: "application/typescript",
-      tsx: "application/typescript",
-      json: "application/json",
-      xml: "application/xml",
-      py: "text/x-python",
-      java: "text/x-java-source",
-      cpp: "text/x-c++src",
-      c: "text/x-csrc",
-      h: "text/x-chdr",
-
-      // Archives
-      zip: "application/zip",
-      rar: "application/x-rar-compressed",
-      "7z": "application/x-7z-compressed",
-      tar: "application/x-tar",
-      gz: "application/gzip",
+    if (!data.name || typeof data.name !== "string") {
+      throw new Error("Invalid node data: missing or invalid name property")
     }
 
-    return mimeTypes[extension] || "application/octet-stream"
+    return {
+      id: this.generateId(),
+      name: data.name || "Unknown",
+      type: data.type === "directory" ? "directory" : "file",
+      path: data.path || `/${data.name || "unknown"}`,
+      size: typeof data.size === "number" ? data.size : this.estimateFileSize(data.name),
+      lastModified: data.lastModified ? new Date(data.lastModified) : new Date(),
+      mimeType: data.mimeType,
+      content: data.content,
+      children: data.children?.map((child: any) => this.validateNode(child)),
+    }
   }
 
-  private getFileExtension(fileName: string): string | null {
-    const parts = fileName.split(".")
-    return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : null
-  }
+  private countFiles(nodeOrNodes: FileNode | FileNode[]): number {
+    if (!nodeOrNodes) return 0
 
-  private generatePlaceholderThumbnail(fileName: string): string {
-    const extension = this.getFileExtension(fileName) || ""
-    return `/placeholder.svg?height=100&width=100&query=image+file+${extension}`
+    if (Array.isArray(nodeOrNodes)) {
+      return nodeOrNodes.reduce((count, node) => count + this.countFiles(node), 0)
+    }
+
+    const node = nodeOrNodes
+    if (node.type === "file") return 1
+    if (node.children && Array.isArray(node.children)) {
+      return node.children.reduce((count, child) => count + this.countFiles(child), 0)
+    }
+    return 0
   }
 
   private isValidFileNode(node: any): boolean {
-    // Check required properties
     if (!node || typeof node !== "object") return false
     if (typeof node.name !== "string" || node.name.trim() === "") return false
     if (node.type !== "file" && node.type !== "directory") return false
-
-    // Validate path
     if (typeof node.path !== "string" || node.path.trim() === "") return false
 
-    // Validate children if it's a directory
     if (node.type === "directory" && node.children) {
       if (!Array.isArray(node.children)) return false
       return node.children.every((child: any) => this.isValidFileNode(child))
     }
 
-    // Validate size if it's a file
     if (node.type === "file" && node.size !== undefined) {
       if (typeof node.size !== "number" || node.size < 0) return false
     }
@@ -403,50 +484,52 @@ export class FileImporter implements IFileImporter {
   private sanitizeNode(node: any): FileNode {
     const sanitized: FileNode = {
       id: node.id || this.generateId(),
-      name: this.sanitizeString(node.name),
+      name: this.sanitizeString(node.name || "Unknown"),
       type: node.type === "directory" ? "directory" : "file",
-      path: this.sanitizePath(node.path),
+      path: this.sanitizePath(node.path || `/${node.name || "unknown"}`),
+      lastModified: new Date(),
     }
 
-    // Add size for files
     if (node.type === "file" && typeof node.size === "number" && node.size >= 0) {
       sanitized.size = node.size
+    } else if (sanitized.type === "file") {
+      sanitized.size = this.estimateFileSize(sanitized.name)
     }
 
-    // Add lastModified if valid
     if (node.lastModified) {
       try {
         sanitized.lastModified = new Date(node.lastModified)
       } catch (e) {
-        // Ignore invalid dates
+        sanitized.lastModified = new Date()
       }
     }
 
-    // Add metadata if present
     if (node.metadata && typeof node.metadata === "object") {
       sanitized.metadata = { ...node.metadata }
     }
 
-    // Add permissions if present
     if (typeof node.permissions === "string") {
       sanitized.permissions = node.permissions
     }
 
-    // Add MIME type if present
     if (typeof node.mimeType === "string") {
       sanitized.mimeType = node.mimeType
+    } else if (sanitized.type === "file") {
+      sanitized.mimeType = this.getMimeTypeFromFileName(sanitized.name)
     }
 
-    // Add thumbnail URLs if present
     if (typeof node.thumbnailUrl === "string") {
       sanitized.thumbnailUrl = node.thumbnailUrl
+    } else if (sanitized.mimeType?.startsWith("image/")) {
+      sanitized.thumbnailUrl = this.generatePlaceholderThumbnail(sanitized.name)
     }
 
     if (typeof node.previewUrl === "string") {
       sanitized.previewUrl = node.previewUrl
+    } else if (sanitized.thumbnailUrl) {
+      sanitized.previewUrl = sanitized.thumbnailUrl
     }
 
-    // Process children recursively
     if (node.type === "directory" && Array.isArray(node.children)) {
       sanitized.children = node.children.map((child: any) => this.sanitizeNode(child))
     }
@@ -454,53 +537,30 @@ export class FileImporter implements IFileImporter {
     return sanitized
   }
 
-  private sanitizeString(str: string): string {
-    return str.trim().replace(/[<>]/g, "")
-  }
+  private normalizePath(path: string): string {
+    if (typeof path !== "string") return "/"
 
-  private sanitizePath(path: string): string {
-    // Normalize path format
-    let sanitized = path.trim().replace(/\\/g, "/")
-
-    // Remove any potential path traversal attempts
-    sanitized = sanitized.replace(/\.\.\//g, "")
-
-    // Ensure path starts with /
-    if (!sanitized.startsWith("/")) {
-      sanitized = "/" + sanitized
+    let normalized = path.trim().replace(/\\/g, "/")
+    if (!normalized.startsWith("/")) {
+      normalized = "/" + normalized
     }
-
-    // Remove duplicate slashes
-    sanitized = sanitized.replace(/\/+/g, "/")
-
-    return sanitized
-  }
-
-  private isValidUrl(url: string): boolean {
-    try {
-      new URL(url)
-      return true
-    } catch (e) {
-      return false
+    normalized = normalized.replace(/\/+/g, "/")
+    if (normalized.length > 1 && normalized.endsWith("/")) {
+      normalized = normalized.slice(0, -1)
     }
+    return normalized
   }
 
-  private generateId(): string {
-    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
-  }
-
-  private async readFileContent(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          resolve(event.target.result as string)
-        } else {
-          reject(new Error("Failed to read file"))
-        }
-      }
-      reader.onerror = () => reject(new Error("Failed to read file"))
-      reader.readAsText(file)
-    })
-  }
-}
+  private estimateFileSize(fileName: string): number {
+    const extension = this.getFileExtension(fileName)
+    const sizeEstimates: Record<string, number> = {
+      txt: 1024,
+      md: 2048,
+      json: 1536,
+      js: 3072,
+      ts: 3584,
+      html: 2048,
+      css: 1536,
+      png: 51200,
+      jpg: 76800,
+      jpeg: 76800,\

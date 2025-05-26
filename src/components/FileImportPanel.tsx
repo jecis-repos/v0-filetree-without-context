@@ -6,24 +6,25 @@ import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
-import { Link, AlertCircle, Check, Info } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Upload, Link, FileJson, FolderOpen } from "lucide-react"
 import type { DIContainer } from "../container/DIContainer"
 import type { FileNode } from "../interfaces/IFileSystemProvider"
+import type { ImportResult } from "../interfaces/IFileImporter"
 
 interface FileImportPanelProps {
   container: DIContainer
-  onImportComplete: (nodes: FileNode[]) => void
+  onImportComplete?: (nodes: FileNode[]) => void
 }
 
 export const FileImportPanel: React.FC<FileImportPanelProps> = ({ container, onImportComplete }) => {
-  const [urlInput, setUrlInput] = useState("https://ab-file-explorer.athleticnext.workers.dev/?file=regular")
   const [isLoading, setIsLoading] = useState(false)
+  const [importUrl, setImportUrl] = useState("")
+  const [jsonContent, setJsonContent] = useState("")
+  const [importResult, setImportResult] = useState<ImportResult | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
-  const [importStats, setImportStats] = useState<{ files: number; directories: number } | null>(null)
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files
@@ -31,198 +32,211 @@ export const FileImportPanel: React.FC<FileImportPanelProps> = ({ container, onI
 
     setIsLoading(true)
     setError(null)
-    setSuccess(null)
-    setImportStats(null)
+    setImportResult(null)
 
     try {
       const fileImporter = container.resolve("IFileImporter")
-      const result = await fileImporter.importFromLocalFile(files[0])
+      const result = await fileImporter.importFromFiles(files)
 
-      if (result.success && result.data) {
-        const stats = calculateImportStats(result.data)
-        setImportStats(stats)
-        setSuccess(`Successfully imported ${files[0].name} - ${stats.files} files, ${stats.directories} directories`)
-        onImportComplete(result.data)
-      } else {
-        setError(result.error || "Failed to import file")
+      setImportResult(result)
+
+      if (result.success && onImportComplete) {
+        onImportComplete(result.nodes)
       }
     } catch (err) {
-      setError(err.message || "An unexpected error occurred")
+      setError(err instanceof Error ? err.message : "Failed to import files")
     } finally {
       setIsLoading(false)
-      // Reset file input
+      // Reset the input value so the same file can be selected again
       event.target.value = ""
     }
   }
 
+  const handleDirectoryUpload = async () => {
+    try {
+      // @ts-ignore - showDirectoryPicker is not in the TypeScript types yet
+      const directoryHandle = await window.showDirectoryPicker()
+
+      setIsLoading(true)
+      setError(null)
+      setImportResult(null)
+
+      const fileImporter = container.resolve("IFileImporter")
+      const result = await fileImporter.importFromDirectory(directoryHandle)
+
+      setImportResult(result)
+
+      if (result.success && onImportComplete) {
+        onImportComplete(result.nodes)
+      }
+    } catch (err) {
+      // User cancelled or API not supported
+      if (err instanceof Error && err.name !== "AbortError") {
+        setError(err.message)
+      }
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const handleUrlImport = async () => {
-    if (!urlInput.trim()) {
+    if (!importUrl.trim()) {
       setError("Please enter a URL")
       return
     }
 
     setIsLoading(true)
     setError(null)
-    setSuccess(null)
-    setImportStats(null)
+    setImportResult(null)
 
     try {
       const fileImporter = container.resolve("IFileImporter")
-      const result = await fileImporter.importFromUrl(urlInput)
+      const result = await fileImporter.importFromUrl(importUrl)
 
-      if (result.success && result.data) {
-        const stats = calculateImportStats(result.data)
-        setImportStats(stats)
-        setSuccess(`Successfully imported data from URL - ${stats.files} files, ${stats.directories} directories`)
-        onImportComplete(result.data)
-      } else {
-        setError(result.error || "Failed to import from URL")
+      setImportResult(result)
+
+      if (result.success && onImportComplete) {
+        onImportComplete(result.nodes)
       }
     } catch (err) {
-      setError(err.message || "An unexpected error occurred")
+      setError(err instanceof Error ? err.message : "Failed to import from URL")
     } finally {
       setIsLoading(false)
     }
   }
 
-  const calculateImportStats = (nodes: FileNode[]): { files: number; directories: number } => {
-    let files = 0
-    let directories = 0
-
-    const traverse = (node: FileNode) => {
-      if (node.type === "file") {
-        files++
-      } else {
-        directories++
-      }
-
-      if (node.children) {
-        node.children.forEach(traverse)
-      }
+  const handleJsonImport = async () => {
+    if (!jsonContent.trim()) {
+      setError("Please enter JSON content")
+      return
     }
 
-    nodes.forEach(traverse)
-    return { files, directories }
-  }
+    setIsLoading(true)
+    setError(null)
+    setImportResult(null)
 
-  const loadExampleUrl = () => {
-    setUrlInput("https://ab-file-explorer.athleticnext.workers.dev/?file=regular")
+    try {
+      const fileImporter = container.resolve("IFileImporter")
+      const result = await fileImporter.importFromJSON(jsonContent)
+
+      setImportResult(result)
+
+      if (result.success && onImportComplete) {
+        onImportComplete(result.nodes)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to import JSON")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
-    <Card>
+    <Card className="w-full">
       <CardHeader>
-        <CardTitle>Import Files</CardTitle>
+        <CardTitle className="flex items-center">
+          <Upload className="mr-2 h-5 w-5" />
+          Import Files
+        </CardTitle>
       </CardHeader>
       <CardContent>
-        <Tabs defaultValue="url">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="url">Import from URL</TabsTrigger>
-            <TabsTrigger value="file">Upload File</TabsTrigger>
+        <Tabs defaultValue="file">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="file">File</TabsTrigger>
+            <TabsTrigger value="directory">Directory</TabsTrigger>
+            <TabsTrigger value="url">URL</TabsTrigger>
+            <TabsTrigger value="json">JSON</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="url" className="space-y-4 pt-4">
-            <div className="grid w-full items-center gap-1.5">
-              <label htmlFor="url-input" className="text-sm font-medium">
-                Enter URL
-              </label>
-              <div className="flex w-full items-center space-x-2">
+          <TabsContent value="file" className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="file-upload">Upload Files</Label>
+              <Input
+                id="file-upload"
+                type="file"
+                multiple
+                onChange={handleFileUpload}
+                disabled={isLoading}
+                className="cursor-pointer"
+              />
+              <p className="text-xs text-gray-500">Select one or more files to import</p>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="directory" className="space-y-4">
+            <div className="space-y-2">
+              <Label>Upload Directory</Label>
+              <Button onClick={handleDirectoryUpload} disabled={isLoading} className="w-full">
+                <FolderOpen className="mr-2 h-4 w-4" />
+                Select Directory
+              </Button>
+              <p className="text-xs text-gray-500">
+                Select a directory to import its structure (requires modern browser)
+              </p>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="url" className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="import-url">Import from URL</Label>
+              <div className="flex space-x-2">
                 <Input
-                  id="url-input"
+                  id="import-url"
                   type="url"
                   placeholder="https://example.com/file-tree.json"
-                  value={urlInput}
-                  onChange={(e) => setUrlInput(e.target.value)}
+                  value={importUrl}
+                  onChange={(e) => setImportUrl(e.target.value)}
                   disabled={isLoading}
                 />
-                <Button onClick={handleUrlImport} disabled={isLoading || !urlInput.trim()}>
-                  <Link className="h-4 w-4 mr-2" />
+                <Button onClick={handleUrlImport} disabled={isLoading}>
+                  <Link className="mr-2 h-4 w-4" />
                   Import
                 </Button>
               </div>
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-gray-500 dark:text-gray-400">Import file tree from a JSON endpoint</p>
-                <Button variant="ghost" size="sm" onClick={loadExampleUrl}>
-                  Load Example
-                </Button>
-              </div>
+              <p className="text-xs text-gray-500">Enter a URL to a JSON file containing file tree structure</p>
             </div>
-
-            <Alert>
-              <Info className="h-4 w-4" />
-              <AlertTitle>Supported Formats</AlertTitle>
-              <AlertDescription className="space-y-2">
-                <div>
-                  <strong>Flat file paths:</strong>
-                  <pre className="text-xs bg-gray-100 dark:bg-gray-800 p-2 rounded mt-1">
-                    {`{
-  "name": "Project Name",
-  "filepaths": [
-    "src/index.ts",
-    "package.json",
-    "README.md"
-  ]
-}`}
-                  </pre>
-                </div>
-                <div>
-                  <strong>Hierarchical structure:</strong> Standard file tree with nested objects
-                </div>
-              </AlertDescription>
-            </Alert>
           </TabsContent>
 
-          <TabsContent value="file" className="space-y-4 pt-4">
-            <div className="grid w-full max-w-sm items-center gap-1.5">
-              <label htmlFor="file-upload" className="text-sm font-medium">
-                Select JSON file
-              </label>
-              <Input id="file-upload" type="file" accept=".json" onChange={handleFileUpload} disabled={isLoading} />
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Upload a JSON file containing file tree structure
-              </p>
+          <TabsContent value="json" className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="json-content">JSON Content</Label>
+              <textarea
+                id="json-content"
+                className="w-full h-32 p-2 border rounded-md resize-none"
+                placeholder='{"name": "root", "type": "directory", "children": [...]}'
+                value={jsonContent}
+                onChange={(e) => setJsonContent(e.target.value)}
+                disabled={isLoading}
+              />
+              <Button onClick={handleJsonImport} disabled={isLoading} className="w-full">
+                <FileJson className="mr-2 h-4 w-4" />
+                Import JSON
+              </Button>
             </div>
-
-            <Alert>
-              <Info className="h-4 w-4" />
-              <AlertTitle>File Format Examples</AlertTitle>
-              <AlertDescription>
-                <p className="text-xs">
-                  Your JSON file can contain either a flat array of file paths or a hierarchical file tree structure.
-                  Both formats will be automatically converted to a browsable file tree.
-                </p>
-              </AlertDescription>
-            </Alert>
           </TabsContent>
         </Tabs>
 
+        {isLoading && (
+          <div className="flex items-center justify-center p-4">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500 mr-2"></div>
+            <span>Importing...</span>
+          </div>
+        )}
+
         {error && (
           <Alert variant="destructive" className="mt-4">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Error</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
 
-        {success && (
-          <Alert className="mt-4 bg-green-50 dark:bg-green-900 border-green-200 dark:border-green-800">
-            <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
-            <AlertTitle>Success</AlertTitle>
-            <AlertDescription>{success}</AlertDescription>
+        {importResult && (
+          <Alert className={importResult.success ? "mt-4 bg-green-50" : "mt-4 bg-yellow-50"}>
+            <AlertDescription>
+              {importResult.success
+                ? `Successfully imported ${importResult.importedFiles} files`
+                : `Import completed with issues: ${importResult.errors.join(", ")}`}
+            </AlertDescription>
           </Alert>
-        )}
-
-        {importStats && (
-          <div className="mt-4 flex gap-2">
-            <Badge variant="outline">{importStats.files} files</Badge>
-            <Badge variant="outline">{importStats.directories} directories</Badge>
-          </div>
-        )}
-
-        {isLoading && (
-          <div className="flex justify-center mt-4">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
-          </div>
         )}
       </CardContent>
     </Card>

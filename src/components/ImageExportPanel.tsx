@@ -46,6 +46,11 @@ export const ImageExportPanel: React.FC<ImageExportPanelProps> = ({ fileTree, co
   }
 
   const exportImage = async (format: "jpeg" | "png" | "webp") => {
+    if (!fileTree || fileTree.length === 0) {
+      setError("No file tree data available to export")
+      return
+    }
+
     setIsExporting(true)
     setError(null)
     setExportResult(null)
@@ -64,13 +69,19 @@ export const ImageExportPanel: React.FC<ImageExportPanelProps> = ({ fileTree, co
         setError(result.error || "Export failed")
       }
     } catch (err) {
-      setError(err.message || "An unexpected error occurred")
+      setError(err instanceof Error ? err.message : "An unexpected error occurred")
+      console.error("Export error:", err)
     } finally {
       setIsExporting(false)
     }
   }
 
   const exportVisualization = async (type: "tree" | "sunburst" | "treemap") => {
+    if (!fileTree || fileTree.length === 0) {
+      setError("No file tree data available to export")
+      return
+    }
+
     setIsExporting(true)
     setError(null)
     setExportResult(null)
@@ -88,7 +99,8 @@ export const ImageExportPanel: React.FC<ImageExportPanelProps> = ({ fileTree, co
         setError(result.error || "Export failed")
       }
     } catch (err) {
-      setError(err.message || "An unexpected error occurred")
+      setError(err instanceof Error ? err.message : "An unexpected error occurred")
+      console.error("Visualization export error:", err)
     } finally {
       setIsExporting(false)
     }
@@ -330,7 +342,7 @@ export const ImageExportPanel: React.FC<ImageExportPanelProps> = ({ fileTree, co
         {exportResult && (
           <Alert>
             <AlertDescription>
-              Image exported successfully! Size: {Math.round(exportResult.metadata?.size / 1024)} KB
+              Image exported successfully! Size: {Math.round((exportResult.metadata?.size || 0) / 1024)} KB
             </AlertDescription>
           </Alert>
         )}

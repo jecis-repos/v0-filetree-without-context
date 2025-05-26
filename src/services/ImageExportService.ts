@@ -72,11 +72,12 @@ export class ImageExportService {
       this.performanceMonitor?.endTimer(timerId!, result.success)
       return result
     } catch (error) {
-      this.logger?.error("ImageExport", "Export failed", { error: error.message })
-      this.performanceMonitor?.endTimer(timerId!, false, { error: error.message })
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      this.logger?.error("ImageExport", "Export failed", { error: errorMessage })
+      this.performanceMonitor?.endTimer(timerId!, false, { error: errorMessage })
       return {
         success: false,
-        error: error.message,
+        error: errorMessage,
       }
     }
   }
@@ -112,7 +113,11 @@ export class ImageExportService {
     try {
       const filePaths = this.extractFilePaths(fileTree)
 
-      const result = await this.phpImageProvider.generateDirectoryVisualization(filePaths, options)
+      // Apply theme settings
+      const theme = getTheme(options.theme || "modern")
+      const enhancedOptions = this.applyThemeToOptions(options, theme)
+
+      const result = await this.phpImageProvider.generateDirectoryVisualization(filePaths, enhancedOptions)
 
       if (result.success) {
         this.logger?.info("ImageExport", "Directory visualization exported successfully", result.metadata)
@@ -123,11 +128,12 @@ export class ImageExportService {
       this.performanceMonitor?.endTimer(timerId!, result.success)
       return result
     } catch (error) {
-      this.logger?.error("ImageExport", "Visualization export failed", { error: error.message })
-      this.performanceMonitor?.endTimer(timerId!, false, { error: error.message })
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      this.logger?.error("ImageExport", "Visualization export failed", { error: errorMessage })
+      this.performanceMonitor?.endTimer(timerId!, false, { error: errorMessage })
       return {
         success: false,
-        error: error.message,
+        error: errorMessage,
       }
     }
   }
@@ -143,33 +149,45 @@ export class ImageExportService {
       filename,
     })
 
-    const url = result.url || URL.createObjectURL(result.data)
-    const link = document.createElement("a")
-    link.href = url
-    link.download = filename || `file-tree-export.${result.metadata?.format || "png"}`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    try {
+      const url = result.url || URL.createObjectURL(result.data)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = filename || `file-tree-export.${result.metadata?.format || "png"}`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
 
-    // Clean up object URL if we created it
-    if (!result.url) {
-      URL.revokeObjectURL(url)
+      // Clean up object URL if we created it
+      if (!result.url) {
+        URL.revokeObjectURL(url)
+      }
+
+      this.logger?.info("ImageExport", "Image download initiated", { filename: link.download })
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      this.logger?.error("ImageExport", "Download failed", { error: errorMessage })
+      throw new Error(`Failed to download image: ${errorMessage}`)
     }
-
-    this.logger?.info("ImageExport", "Image download initiated", { filename: link.download })
   }
 
   private extractFilePaths(fileTree: FileNode[]): string[] {
     const paths: string[] = []
 
     const traverse = (node: FileNode) => {
-      paths.push(node.path)
-      if (node.children) {
+      if (node && typeof node.path === "string") {
+        paths.push(node.path)
+      }
+
+      if (node && node.children && Array.isArray(node.children)) {
         node.children.forEach(traverse)
       }
     }
 
-    fileTree.forEach(traverse)
+    if (Array.isArray(fileTree)) {
+      fileTree.forEach(traverse)
+    }
+
     return paths
   }
 
@@ -177,11 +195,15 @@ export class ImageExportService {
     let count = 0
     const traverse = (node: FileNode) => {
       count++
-      if (node.children) {
+      if (node && node.children && Array.isArray(node.children)) {
         node.children.forEach(traverse)
       }
     }
-    fileTree.forEach(traverse)
+
+    if (Array.isArray(fileTree)) {
+      fileTree.forEach(traverse)
+    }
+
     return count
   }
 }
