@@ -161,15 +161,19 @@ export const FileTreeExplorer: React.FC<FileTreeExplorerProps> = ({ container })
     return (
       <div key={node.id} className="select-none">
         <div
-          className={`file-tree-item ${isSelected ? "file-tree-item-selected" : ""}`}
+          className={`flex items-center py-1 px-2 rounded cursor-pointer transition-colors ${
+            isSelected
+              ? "bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-800/30"
+              : "hover:bg-gray-100 dark:hover:bg-gray-800"
+          }`}
           style={{ paddingLeft: `${depth * 16 + 8}px` }}
           onClick={() => handleNodeClick(node)}
         >
-          <div className="file-tree-item-icon">
+          <div className="mr-2 flex-shrink-0">
             {node.type === "directory" ? (
               <Folder className="h-4 w-4 text-blue-500" />
             ) : node.mimeType?.startsWith("image/") ? (
-              <div className="file-icon file-icon-image">
+              <div className="flex items-center justify-center w-6 h-6 rounded-sm bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300">
                 <img
                   src={node.thumbnailUrl || "/placeholder.svg?height=24&width=24&query=image"}
                   alt=""
@@ -180,8 +184,8 @@ export const FileTreeExplorer: React.FC<FileTreeExplorerProps> = ({ container })
               <File className="h-4 w-4 text-gray-500" />
             )}
           </div>
-          <span className="file-tree-item-name">{node.name}</span>
-          {node.size && <span className="file-tree-item-meta">{formatBytes(node.size)}</span>}
+          <span className="truncate flex-grow">{node.name}</span>
+          {node.size && <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">{formatBytes(node.size)}</span>}
         </div>
         {node.type === "directory" && hasChildren && isExpanded && (
           <div className="animate-fade-in">{node.children!.map((child) => renderFileNode(child, depth + 1))}</div>
@@ -222,18 +226,24 @@ export const FileTreeExplorer: React.FC<FileTreeExplorerProps> = ({ container })
 
   const renderBreadcrumbs = () => {
     return (
-      <div className="breadcrumb">
-        <button className="breadcrumb-item flex items-center" onClick={() => navigateToBreadcrumb(-1)}>
+      <div className="flex items-center text-sm text-gray-600 dark:text-gray-400 mb-4">
+        <button
+          className="flex items-center hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+          onClick={() => navigateToBreadcrumb(-1)}
+        >
           <Folder className="h-3 w-3 mr-1" />
           root
         </button>
 
         {currentPath.map((part, index) => (
           <span key={index}>
-            <span className="breadcrumb-separator">
+            <span className="mx-2 text-gray-400 dark:text-gray-600">
               <ChevronRight className="h-3 w-3" />
             </span>
-            <button className="breadcrumb-item" onClick={() => navigateToBreadcrumb(index)}>
+            <button
+              className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+              onClick={() => navigateToBreadcrumb(index)}
+            >
               {part}
             </button>
           </span>
@@ -336,7 +346,7 @@ export const FileTreeExplorer: React.FC<FileTreeExplorerProps> = ({ container })
                   <TabsContent value="explorer" className="m-0">
                     {loading ? (
                       <div className="flex items-center justify-center h-full">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
+                        <div className="spinner h-8 w-8"></div>
                       </div>
                     ) : fileTree.length === 0 ? (
                       <div className="flex flex-col items-center justify-center h-full text-center p-4">

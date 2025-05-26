@@ -70,30 +70,9 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       root.classList.remove("dark")
     }
 
-    // Apply color scheme CSS variables
-    const scheme = colorSchemeMap[colorScheme]
-    Object.entries(scheme.primary).forEach(([key, value]) => {
-      root.style.setProperty(`--color-primary-${key}`, value)
-    })
-    Object.entries(scheme.accent).forEach(([key, value]) => {
-      root.style.setProperty(`--color-accent-${key}`, value)
-    })
-
-    // Listen for system preference changes
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
-    const handleChange = () => {
-      if (mode === "system") {
-        setIsDark(mediaQuery.matches)
-        if (mediaQuery.matches) {
-          root.classList.add("dark")
-        } else {
-          root.classList.remove("dark")
-        }
-      }
-    }
-
-    mediaQuery.addEventListener("change", handleChange)
-    return () => mediaQuery.removeEventListener("change", handleChange)
+    // Apply color scheme
+    root.classList.remove("theme-blue", "theme-purple", "theme-green", "theme-orange", "theme-neutral")
+    root.classList.add(`theme-${colorScheme}`)
   }, [mode, colorScheme])
 
   return (
