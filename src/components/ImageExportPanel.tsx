@@ -47,7 +47,7 @@ export const ImageExportPanel: React.FC<ImageExportPanelProps> = ({ fileTree, co
 
   const exportImage = async (format: "jpeg" | "png" | "webp") => {
     if (!fileTree || fileTree.length === 0) {
-      setError("No file tree data available to export")
+      setError("No file tree data available to export. Please load some files first.")
       return
     }
 
@@ -56,21 +56,27 @@ export const ImageExportPanel: React.FC<ImageExportPanelProps> = ({ fileTree, co
     setExportResult(null)
 
     try {
+      console.log("Exporting image with fileTree:", fileTree)
+
       const imageExportService = container.resolve("ImageExportService")
       const exportOptions = { ...options, format }
 
+      console.log("Export options:", exportOptions)
+
       const result = await imageExportService.exportFileTreeAsImage(fileTree, exportOptions)
+
+      console.log("Export result:", result)
 
       if (result.success) {
         setExportResult(result)
         // Auto-download the image
         await imageExportService.downloadImage(result, `file-tree-export.${format}`)
       } else {
-        setError(result.error || "Export failed")
+        setError(result.error || "Export failed - please check the console for details")
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An unexpected error occurred")
       console.error("Export error:", err)
+      setError(err instanceof Error ? err.message : "An unexpected error occurred during export")
     } finally {
       setIsExporting(false)
     }
@@ -78,7 +84,7 @@ export const ImageExportPanel: React.FC<ImageExportPanelProps> = ({ fileTree, co
 
   const exportVisualization = async (type: "tree" | "sunburst" | "treemap") => {
     if (!fileTree || fileTree.length === 0) {
-      setError("No file tree data available to export")
+      setError("No file tree data available to export. Please load some files first.")
       return
     }
 
@@ -87,20 +93,26 @@ export const ImageExportPanel: React.FC<ImageExportPanelProps> = ({ fileTree, co
     setExportResult(null)
 
     try {
+      console.log("Exporting visualization with fileTree:", fileTree)
+
       const imageExportService = container.resolve("ImageExportService")
       const exportOptions = { ...options, visualizationType: type }
 
+      console.log("Visualization export options:", exportOptions)
+
       const result = await imageExportService.exportDirectoryVisualization(fileTree, exportOptions)
+
+      console.log("Visualization export result:", result)
 
       if (result.success) {
         setExportResult(result)
         await imageExportService.downloadImage(result, `file-tree-${type}.${options.format}`)
       } else {
-        setError(result.error || "Export failed")
+        setError(result.error || "Visualization export failed - please check the console for details")
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An unexpected error occurred")
       console.error("Visualization export error:", err)
+      setError(err instanceof Error ? err.message : "An unexpected error occurred during visualization export")
     } finally {
       setIsExporting(false)
     }

@@ -109,6 +109,15 @@ export class PhpImageProvider {
     options: ImageGenerationOptions,
   ): Promise<ImageExportResult> {
     return new Promise((resolve) => {
+      // Validate input
+      if (!Array.isArray(filePaths) || filePaths.length === 0) {
+        resolve({
+          success: false,
+          error: "No file paths provided for image generation",
+        })
+        return
+      }
+
       const canvas = document.createElement("canvas")
       canvas.width = options.width || 1200
       canvas.height = options.height || 800
@@ -122,99 +131,151 @@ export class PhpImageProvider {
         return
       }
 
-      // Fill background
-      ctx.fillStyle = options.backgroundColor || "#ffffff"
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      try {
+        // Fill background
+        ctx.fillStyle = options.backgroundColor || "#ffffff"
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-      // Set text properties
-      ctx.fillStyle = options.textColor || "#000000"
-      ctx.font = `${options.fontSize || 12}px ${options.fontFamily || "Arial, sans-serif"}`
-
-      // Draw title
-      ctx.font = `bold ${(options.fontSize || 12) + 4}px ${options.fontFamily || "Arial, sans-serif"}`
-      ctx.fillText("File Tree Visualization", 20, 30)
-
-      // Draw file paths
-      ctx.font = `${options.fontSize || 12}px ${options.fontFamily || "Arial, sans-serif"}`
-      const lineHeight = (options.fontSize || 12) * 1.5
-      let y = 60
-
-      // Sort paths for better visualization
-      const sortedPaths = [...filePaths].sort()
-
-      // Draw file tree
-      for (const path of sortedPaths) {
-        if (y > canvas.height - lineHeight) break // Stop if we run out of space
-
-        const parts = path.split("/").filter(Boolean)
-        const indent = parts.length - 1
-        const x = 20 + indent * 20
-        const name = parts[parts.length - 1] || path
-
-        // Draw connector lines
-        if (indent > 0) {
-          ctx.strokeStyle = "#aaaaaa"
-          ctx.beginPath()
-          ctx.moveTo(x - 10, y - lineHeight / 2)
-          ctx.lineTo(x - 10, y)
-          ctx.lineTo(x, y)
-          ctx.stroke()
-        }
-
-        // Draw file/folder icon
-        const isDirectory = !path.includes(".")
-        if (isDirectory) {
-          ctx.fillStyle = "#4a7ebb"
-          ctx.fillRect(x, y - 8, 12, 10)
-        } else {
-          ctx.fillStyle = "#a0a0a0"
-          ctx.fillRect(x, y - 8, 10, 12)
-          ctx.fillStyle = "#ffffff"
-          ctx.fillRect(x + 2, y - 6, 6, 8)
-        }
-
-        // Draw file/folder name
+        // Set text properties
+        const fontSize = options.fontSize || 12
+        const fontFamily = options.fontFamily || "Arial, sans-serif"
         ctx.fillStyle = options.textColor || "#000000"
-        ctx.fillText(name, x + 16, y)
+        ctx.font = `${fontSize}px ${fontFamily}`
 
-        y += lineHeight
-      }
+        // Draw title
+        ctx.font = `bold ${fontSize + 4}px ${fontFamily}`
+        ctx.fillText("File Tree Visualization", 20, 30)
 
-      // Add metadata
-      ctx.fillStyle = "#666666"
-      ctx.font = `10px ${options.fontFamily || "Arial, sans-serif"}`
-      ctx.fillText(`Total items: ${filePaths.length}`, 20, canvas.height - 20)
-      ctx.fillText(`Generated: ${new Date().toLocaleString()}`, 20, canvas.height - 10)
+        // Draw file count info
+        ctx.font = `${fontSize}px ${fontFamily}`
+        ctx.fillStyle = "#666666"
+        ctx.fillText(`Total files: ${filePaths.length}`, 20, 50)
 
-      // Convert canvas to blob
-      canvas.toBlob(
-        (blob) => {
-          if (!blob) {
-            resolve({
-              success: false,
-              error: "Failed to convert canvas to blob",
-            })
-            return
+        // Reset text color for file tree
+        ctx.fillStyle = options.textColor || "#000000"
+        ctx.font = `${fontSize}px ${fontFamily}`
+
+        const lineHeight = fontSize * 1.5
+        let y = 80
+
+        // Sort paths for better visualization
+        const sortedPaths = [...filePaths].sort()
+
+        // Draw file tree with better structure
+        for (let i = 0; i < sortedPaths.length && y < canvas.height - 40; i++) {
+          const path = sortedPaths[i]
+          if (!path || typeof path !== "string") continue
+
+          const parts = path.split("/").filter(Boolean)
+          const indent = Math.max(0, parts.length - 1)
+          const x = 20 + indent * 20
+          const name = parts[parts.length - 1] || path
+
+          // Draw connector lines for hierarchy
+          if (indent > 0) {
+            ctx.strokeStyle = "#cccccc"
+            ctx.lineWidth = 1
+            ctx.beginPath()
+            ctx.moveTo(x - 15, y - lineHeight / 2)
+            ctx.lineTo(x - 15, y)
+            ctx.lineTo(x - 5, y)
+            ctx.stroke()
           }
 
-          const url = URL.createObjectURL(blob)
-          resolve({
-            success: true,
-            data: blob,
-            url,
-            metadata: {
-              format: options.format || "png",
-              size: blob.size,
-              width: canvas.width,
-              height: canvas.height,
-              generatedBy: "ClientSide",
-            },
-          })
-        },
-        `image/${options.format || "png"}`,
-        options.quality ? options.quality / 100 : 0.9,
-      )
+          // Draw file/folder icon
+          const isDirectory = !name.includes(".") || path.endsWith("/")
+          if (isDirectory) {
+            // Draw folder icon
+            ctx.fillStyle = "#4a90e2"
+            ctx.fillRect(x, y - 10, 14, 12)
+            ctx.fillStyle = "#5ba0f2"
+            ctx.fillRect(x + 2, y - 8, 10, 8)
+          } else {
+            // Draw file icon
+            ctx.fillStyle = "#8e8e93"
+            ctx.fillRect(x, y - 10, 12, 14)
+            ctx.fillStyle = "#ffffff"
+            ctx.fillRect(x + 2, y - 8, 8, 10)
+
+            // Add file type indicator
+            const ext = name.split(".").pop()?.toLowerCase()
+            if (ext) {
+              ctx.fillStyle = this.getFileTypeColor(ext)
+              ctx.fillRect(x + 10, y - 10, 4, 4)
+            }
+          }
+
+          // Draw file/folder name
+          ctx.fillStyle = options.textColor || "#000000"
+          const maxNameLength = Math.floor((canvas.width - x - 20) / (fontSize * 0.6))
+          const displayName = name.length > maxNameLength ? name.substring(0, maxNameLength - 3) + "..." : name
+          ctx.fillText(displayName, x + 18, y)
+
+          y += lineHeight
+        }
+
+        // Add metadata footer
+        ctx.fillStyle = "#999999"
+        ctx.font = `${fontSize - 2}px ${fontFamily}`
+        ctx.fillText(`Generated: ${new Date().toLocaleString()}`, 20, canvas.height - 30)
+        ctx.fillText(`Canvas: ${canvas.width}x${canvas.height}`, 20, canvas.height - 15)
+
+        // Convert canvas to blob
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              resolve({
+                success: false,
+                error: "Failed to convert canvas to blob",
+              })
+              return
+            }
+
+            const url = URL.createObjectURL(blob)
+            resolve({
+              success: true,
+              data: blob,
+              url,
+              metadata: {
+                format: options.format || "png",
+                size: blob.size,
+                width: canvas.width,
+                height: canvas.height,
+                fileCount: filePaths.length,
+                generatedBy: "ClientSide",
+              },
+            })
+          },
+          `image/${options.format || "png"}`,
+          options.quality ? options.quality / 100 : 0.9,
+        )
+      } catch (error) {
+        resolve({
+          success: false,
+          error: `Canvas rendering failed: ${error.message}`,
+        })
+      }
     })
+  }
+
+  private getFileTypeColor(extension: string): string {
+    const colorMap: Record<string, string> = {
+      js: "#f7df1e",
+      ts: "#3178c6",
+      html: "#e34f26",
+      css: "#1572b6",
+      json: "#000000",
+      md: "#083fa1",
+      png: "#ff6b6b",
+      jpg: "#ff6b6b",
+      jpeg: "#ff6b6b",
+      gif: "#ff6b6b",
+      pdf: "#ff0000",
+      txt: "#6b7280",
+      xml: "#ff6600",
+      svg: "#ff9500",
+    }
+    return colorMap[extension] || "#6b7280"
   }
 
   private async generateClientSideVisualization(
