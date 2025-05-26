@@ -2,7 +2,8 @@ import type { DIContainer } from "../container/DIContainer"
 import type { ILoggingService } from "./LoggingService"
 import { ServiceRegistry } from "./ServiceRegistry"
 import { EndpointChecker } from "./EndpointChecker"
-import { EnvironmentService } from "./EnvironmentService"
+import { config, validateEnvironment } from "../../lib/env-config"
+import { checkDeploymentSecurity } from "../../lib/security-utils"
 
 export interface DiagnosticsReport {
   timestamp: string
@@ -32,8 +33,10 @@ export interface DiagnosticsReport {
     environment: string
     ready: boolean
     issues: string[]
+    warnings: string[]
     baseUrl: string
     apiBaseUrl: string
+    security: any
   }
   recommendations: string[]
 }
@@ -193,15 +196,42 @@ export class SystemDiagnostics {
   }
 
   private async getDeploymentInfo(): Promise<any> {
-    const envService = EnvironmentService.getInstance()
-    const envInfo = envService.getEnvironmentInfo()
+    const issues: string[] = []
+    const warnings: string[] = []
+    let ready = true
+
+    // Validate environment (only on server side)
+    if (typeof window === "undefined") {
+      try {
+        const envValidation = validateEnvironment()
+        issues.push(...envValidation.errors)
+        warnings.push(...envValidation.warnings)
+
+        if (envValidation.errors.length > 0) {
+          ready = false
+        }
+      } catch (error) {
+        issues.push(`Environment validation failed: ${error instanceof Error ? error.message : String(error)}`)
+        ready = false
+      }
+
+      // Check security
+      const securityCheck = checkDeploymentSecurity()
+      if (!securityCheck.isSecure) {
+        issues.push(...securityCheck.issues)
+        ready = false
+      }
+      warnings.push(...securityCheck.warnings)
+    }
 
     return {
-      environment: envInfo.isDevelopment ? "development" : envInfo.isProduction ? "production" : "unknown",
-      ready: envService.isDeploymentReady(),
-      issues: envService.getIssues(),
-      baseUrl: envInfo.baseUrl,
-      apiBaseUrl: envInfo.apiBaseUrl,
+      environment: config.isDevelopment ? "development" : config.isProduction ? "production" : "unknown",
+      ready,
+      issues,
+      warnings,
+      baseUrl: config.baseUrl,
+      apiBaseUrl: config.apiBaseUrl,
+      security: typeof window === "undefined" ? checkDeploymentSecurity() : null,
     }
   }
 
@@ -221,6 +251,14 @@ export class SystemDiagnostics {
     // Deployment recommendations
     if (!report.deployment.ready) {
       recommendations.push("Address deployment issues before going live")
+      if (report.deployment.issues.length > 0) {
+        recommendations.push(`Critical issues: ${report.deployment.issues.slice(0, 3).join(", ")}`)
+      }
+    }
+
+    // Warning recommendations
+    if (report.deployment.warnings.length > 0) {
+      recommendations.push("Review deployment warnings for optimization opportunities")
     }
 
     // Performance recommendations

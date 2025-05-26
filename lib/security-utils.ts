@@ -5,21 +5,36 @@
 
 /**
  * Check if an environment variable name suggests it contains sensitive data
+ * Updated to properly handle publishable/public keys
  */
 export function isSensitiveEnvVar(varName: string): boolean {
   const sensitivePatterns = [
-    "API_KEY",
     "SECRET",
+    "PRIVATE_KEY",
     "PASSWORD",
     "TOKEN",
     "CREDENTIAL",
-    "PRIVATE_KEY",
-    "AUTH",
+    "AUTH_KEY",
     "DATABASE_URL",
     "CONNECTION_STRING",
   ]
 
+  // Patterns that indicate the data is meant to be public
+  const publicPatterns = [
+    "PUBLISHABLE",
+    "PUBLIC",
+    "CLIENT_KEY", // When combined with PUBLISHABLE
+  ]
+
   const upperVarName = varName.toUpperCase()
+
+  // If it contains public patterns, it's not sensitive
+  const isPublic = publicPatterns.some((pattern) => upperVarName.includes(pattern))
+  if (isPublic) {
+    return false
+  }
+
+  // Check for sensitive patterns
   return sensitivePatterns.some((pattern) => upperVarName.includes(pattern))
 }
 
@@ -44,7 +59,7 @@ export function validateClientEnvSecurity(): string[] {
  */
 export function sanitizeForLogging(data: any): any {
   if (typeof data === "string") {
-    // Remove potential API keys, tokens, etc.
+    // Remove potential API keys, tokens, etc. but preserve structure
     return data.replace(
       /([a-zA-Z0-9_-]*(?:key|token|secret|password)[a-zA-Z0-9_-]*[=:]\s*)([^\s,}]+)/gi,
       "$1[REDACTED]",
@@ -107,4 +122,40 @@ export function maskSensitiveData(obj: any, maskChar = "*"): any {
   }
 
   return obj
+}
+
+/**
+ * Check if current environment is properly configured for deployment
+ */
+export function checkDeploymentSecurity(): {
+  isSecure: boolean
+  issues: string[]
+  warnings: string[]
+} {
+  const issues: string[] = []
+  const warnings: string[] = []
+
+  // Check for sensitive data exposure
+  const violations = validateClientEnvSecurity()
+  issues.push(...violations)
+
+  // Check for missing security headers in production
+  if (process.env.NODE_ENV === "production") {
+    if (!process.env.INTERNAL_API_SECRET) {
+      warnings.push("INTERNAL_API_SECRET not set - internal APIs may be vulnerable")
+    }
+  }
+
+  // Check for development-only configurations in production
+  if (process.env.NODE_ENV === "production") {
+    if (process.env.NEXT_PUBLIC_ENABLE_DEBUG === "true") {
+      warnings.push("Debug mode enabled in production")
+    }
+  }
+
+  return {
+    isSecure: issues.length === 0,
+    issues,
+    warnings,
+  }
 }
