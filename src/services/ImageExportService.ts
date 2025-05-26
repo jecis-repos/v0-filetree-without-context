@@ -2,12 +2,19 @@ import type { FileNode } from "../interfaces/IFileSystemProvider"
 import type { PhpImageProvider, ImageGenerationOptions, ImageExportResult } from "../providers/PhpImageProvider"
 import type { ILoggingService } from "./LoggingService"
 import type { IPerformanceMonitor } from "../interfaces/IPerformanceMonitor"
+import { FilePathParser, type VisualizationOptions } from "../utils/FilePathParser"
+import { getTheme, type PreviewTheme } from "../utils/PreviewThemes"
 
 export interface ExportOptions extends ImageGenerationOptions {
   includeStats?: boolean
   showFileTypes?: boolean
   visualizationType?: "tree" | "sunburst" | "treemap" | "list"
-  theme?: "light" | "dark"
+  theme?: string
+  structure?: "flat" | "hierarchical" | "tree" | "list"
+  sortBy?: "name" | "size" | "date" | "type"
+  sortOrder?: "asc" | "desc"
+  showHidden?: boolean
+  maxDepth?: number
 }
 
 export class ImageExportService {
@@ -27,11 +34,34 @@ export class ImageExportService {
     })
 
     try {
-      // Extract file paths from the tree
-      const filePaths = this.extractFilePaths(fileTree)
+      // Apply theme settings
+      const theme = getTheme(options.theme || "modern")
+      const enhancedOptions = this.applyThemeToOptions(options, theme)
 
-      // Generate the image using PHP
-      const result = await this.phpImageProvider.generateFileTreeImage(filePaths, options)
+      // Parse file structure based on options
+      const filePaths = this.extractFilePaths(fileTree)
+      const visualizationOptions: VisualizationOptions = {
+        structure: options.structure || "hierarchical",
+        sortBy: options.sortBy,
+        sortOrder: options.sortOrder,
+        showHidden: options.showHidden,
+        maxDepth: options.maxDepth,
+      }
+
+      const parsedStructure = FilePathParser.parseFilePaths(filePaths, visualizationOptions)
+
+      // Generate the image using PHP with parsed structure
+      const result = await this.phpImageProvider.generateFileTreeImage(
+        parsedStructure.nodes.map((n) => n.path),
+        {
+          ...enhancedOptions,
+          metadata: {
+            structure: parsedStructure.type,
+            stats: parsedStructure.metadata,
+            theme: theme,
+          },
+        },
+      )
 
       if (result.success) {
         this.logger?.info("ImageExport", "File tree image exported successfully", result.metadata)
@@ -48,6 +78,24 @@ export class ImageExportService {
         success: false,
         error: error.message,
       }
+    }
+  }
+
+  private applyThemeToOptions(options: ExportOptions, theme: PreviewTheme): ExportOptions {
+    return {
+      ...options,
+      backgroundColor: options.backgroundColor || theme.colors.background,
+      textColor: options.textColor || theme.colors.textPrimary,
+      fontSize: options.fontSize || 12,
+      fontFamily: options.fontFamily || theme.fonts.primary,
+      // Add theme-specific styling
+      themeData: {
+        colors: theme.colors,
+        fonts: theme.fonts,
+        spacing: theme.spacing,
+        icons: theme.icons,
+        layout: theme.layout,
+      },
     }
   }
 

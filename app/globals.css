@@ -230,3 +230,115 @@
 .theme-neutral .btn-primary {
   @apply bg-gray-600 hover:bg-gray-700 text-white;
 }
+
+/* File Preview Styles */
+.directory-preview {
+  font-feature-settings: "liga" 1, "calt" 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.file-node-preview {
+  transition: background-color 0.15s ease;
+}
+
+.file-node-preview:hover {
+  background-color: var(--hover-color, rgba(0, 0, 0, 0.05));
+}
+
+/* Theme-specific preview styles */
+.preview-modern {
+  --hover-color: #f9fafb;
+}
+
+.preview-dark {
+  --hover-color: #1e293b;
+}
+
+.preview-minimal {
+  --hover-color: #f7fafc;
+}
+
+.preview-terminal {
+  --hover-color: #1a1a1a;
+}
+
+.preview-elegant {
+  --hover-color: #f5f4f2;
+}
+
+/* Preview scaling */
+.preview-container {
+  overflow: auto;
+  position: relative;
+}
+
+.preview-content {
+  transform-origin: top left;
+  transition: transform 0.2s ease;
+}
+
+/* File type indicators */
+.file-type-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+.file-type-js {
+  background-color: #f7df1e;
+}
+.file-type-ts {
+  background-color: #3178c6;
+}
+.file-type-html {
+  background-color: #e34f26;
+}
+.file-type-css {
+  background-color: #1572b6;
+}
+.file-type-json {
+  background-color: #000000;
+}
+.file-type-md {
+  background-color: #083fa1;
+}
+.file-type-png,
+.file-type-jpg,
+.file-type-jpeg {
+  background-color: #ff6b6b;
+}
+.file-type-pdf {
+  background-color: #ff0000;
+}
+.file-type-default {
+  background-color: #6b7280;
+}
+
+/* Export preview overlay */
+.export-preview-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+/* Responsive preview */
+@media (max-width: 768px) {
+  .directory-preview {
+    font-size: 12px;
+    padding: 8px;
+  }
+
+  .file-node-preview {
+    padding: 2px 0;
+  }
+}
