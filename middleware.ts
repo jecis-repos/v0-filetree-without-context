@@ -3,10 +3,13 @@ import type { NextRequest } from "next/server"
 import { routes, matchRoute } from "./src/config/routes"
 
 export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl
-
-  // Add security headers to all responses
+  // Simple middleware that just adds basic headers
   const response = NextResponse.next()
+
+  // Add basic CORS headers for public access
+  response.headers.set("Access-Control-Allow-Origin", "*")
+  response.headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+  response.headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
   // Set security headers
   response.headers.set("X-Content-Type-Options", "nosniff")
@@ -22,20 +25,20 @@ export function middleware(request: NextRequest) {
   )
 
   // Handle API rate limiting
-  if (pathname.startsWith("/api/")) {
+  if (request.nextUrl.pathname.startsWith("/api/")) {
     // Add rate limiting headers
     response.headers.set("X-RateLimit-Limit", "100")
     response.headers.set("X-RateLimit-Remaining", "99")
   }
 
   // Handle file downloads
-  if (matchRoute(pathname, routes.api.filesystem.download)) {
+  if (matchRoute(request.nextUrl.pathname, routes.api.filesystem.download)) {
     // Set appropriate headers for file downloads
     response.headers.set("Cache-Control", "no-cache")
   }
 
   // Handle redirects for old routes
-  if (pathname === "/file-explorer") {
+  if (request.nextUrl.pathname === "/file-explorer") {
     return NextResponse.redirect(new URL(routes.explorer, request.url))
   }
 
@@ -44,7 +47,7 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Apply to all routes
-    "/(.*)",
+    // Apply to API routes only
+    "/api/:path*",
   ],
 }

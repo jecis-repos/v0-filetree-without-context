@@ -21,6 +21,17 @@ export class DIContainer {
   constructor() {
     // Register self
     this.registerInstance("DIContainer", this)
+
+    // Register missing services with default implementations
+    this.registerFactory(
+      "IFileImporter",
+      () => {
+        const { FileImporter } = require("../services/FileImporter")
+        const performanceMonitor = this.resolve("IPerformanceMonitor")
+        return new FileImporter(performanceMonitor)
+      },
+      "singleton",
+    )
   }
 
   loadConfiguration(config: ContainerConfiguration): void {
