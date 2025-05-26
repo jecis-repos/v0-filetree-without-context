@@ -1,4 +1,5 @@
 import type { ILoggingService } from "./LoggingService"
+import { EnvironmentService } from "./EnvironmentService"
 
 export interface EndpointCheckResult {
   endpoint: string
@@ -15,7 +16,15 @@ export class EndpointChecker {
 
   constructor(logger: ILoggingService, baseUrl?: string) {
     this.logger = logger
-    this.baseUrl = baseUrl || (typeof window !== "undefined" ? window.location.origin : "http://localhost:3000")
+
+    if (baseUrl) {
+      this.baseUrl = baseUrl
+    } else {
+      const envService = EnvironmentService.getInstance()
+      this.baseUrl = envService.getBaseUrl()
+    }
+
+    this.logger.info("EndpointChecker", "Initialized", { baseUrl: this.baseUrl })
   }
 
   async checkAllEndpoints(): Promise<EndpointCheckResult[]> {
@@ -76,9 +85,16 @@ export class EndpointChecker {
 
   private async checkEndpoint(endpoint: string, timeout = 10000): Promise<EndpointCheckResult> {
     const startTime = performance.now()
-    const url = new URL(endpoint, this.baseUrl).toString()
 
     try {
+      // Ensure we have a valid base URL
+      if (!this.baseUrl || this.baseUrl === "undefined") {
+        throw new Error("Base URL not properly configured")
+      }
+
+      const url = new URL(endpoint, this.baseUrl).toString()
+      console.log(`Checking endpoint: ${endpoint} -> ${url}`)
+
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), timeout)
 

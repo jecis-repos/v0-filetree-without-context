@@ -14,24 +14,53 @@ async function performBasicHealthCheck() {
     timestamp: new Date().toISOString(),
   }
 
+  // Get the base URL for internal API calls
+  const baseUrl = process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : process.env.NEXT_PUBLIC_API_BASE_URL
+      ? process.env.NEXT_PUBLIC_API_BASE_URL.startsWith("http")
+        ? process.env.NEXT_PUBLIC_API_BASE_URL
+        : `http://localhost:3000${process.env.NEXT_PUBLIC_API_BASE_URL}`
+      : "http://localhost:3000"
+
+  console.log("Using base URL for health checks:", baseUrl)
+
   try {
-    // Check basic API health
-    const healthResponse = await fetch(
-      new URL("/api/health", process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000"),
-    )
+    // Check basic API health with proper URL construction
+    const healthUrl = `${baseUrl}/api/health`
+    console.log("Checking health endpoint:", healthUrl)
+
+    const healthResponse = await fetch(healthUrl, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "Internal-Health-Check",
+      },
+    })
     checks.api.health = healthResponse.ok
+    console.log("Health check result:", healthResponse.status, healthResponse.ok)
   } catch (error) {
     console.error("Health API check failed:", error)
+    checks.api.health = false
   }
 
   try {
-    // Check filesystem API health
-    const fsResponse = await fetch(
-      new URL("/api/filesystem/health", process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000"),
-    )
+    // Check filesystem API health with proper URL construction
+    const fsUrl = `${baseUrl}/api/filesystem/health`
+    console.log("Checking filesystem endpoint:", fsUrl)
+
+    const fsResponse = await fetch(fsUrl, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "Internal-Health-Check",
+      },
+    })
     checks.api.filesystem = fsResponse.ok
+    console.log("Filesystem check result:", fsResponse.status, fsResponse.ok)
   } catch (error) {
     console.error("Filesystem API check failed:", error)
+    checks.api.filesystem = false
   }
 
   return checks

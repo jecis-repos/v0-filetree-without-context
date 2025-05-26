@@ -7,6 +7,8 @@ import { ErrorBoundary } from "../src/components/ErrorBoundary"
 import { DIContainer } from "../src/container/DIContainer"
 import { ServiceRegistry } from "../src/services/ServiceRegistry"
 import { SystemDiagnostics } from "../src/services/SystemDiagnostics"
+import { ApiVerificationDashboard } from "../src/components/ApiVerificationDashboard"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { DiagnosticsReport } from "../src/services/SystemDiagnostics"
 
 export default function Home() {
@@ -162,7 +164,66 @@ export default function Home() {
               </div>
             </div>
           )}
-          <FileTreeExplorer container={container} />
+
+          <Tabs defaultValue="explorer" className="w-full">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="explorer">File Explorer</TabsTrigger>
+              <TabsTrigger value="health">Health Dashboard</TabsTrigger>
+              <TabsTrigger value="verification">API Verification</TabsTrigger>
+              <TabsTrigger value="metrics">Metrics</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="explorer">
+              <FileTreeExplorer container={container} />
+            </TabsContent>
+
+            <TabsContent value="health">
+              <div className="p-6">
+                <h2 className="text-2xl font-bold mb-4">System Health Dashboard</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="p-4 border rounded-lg">
+                    <h3 className="font-semibold mb-2">Services Status</h3>
+                    <p className="text-sm text-gray-600">
+                      {diagnostics ? Object.values(diagnostics.services.tested).filter(Boolean).length : 0} services
+                      healthy
+                    </p>
+                  </div>
+                  <div className="p-4 border rounded-lg">
+                    <h3 className="font-semibold mb-2">Endpoints Status</h3>
+                    <p className="text-sm text-gray-600">
+                      {diagnostics ? diagnostics.endpoints.healthy : 0} endpoints healthy
+                    </p>
+                  </div>
+                  <div className="p-4 border rounded-lg">
+                    <h3 className="font-semibold mb-2">Deployment Status</h3>
+                    <p className="text-sm text-gray-600">
+                      {diagnostics?.deployment.ready ? "Ready" : "Issues detected"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="verification" className="space-y-4">
+              <ApiVerificationDashboard />
+            </TabsContent>
+
+            <TabsContent value="metrics">
+              <div className="p-6">
+                <h2 className="text-2xl font-bold mb-4">Performance Metrics</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-4 border rounded-lg">
+                    <h3 className="font-semibold mb-2">System Performance</h3>
+                    <p className="text-sm text-gray-600">Performance monitoring active</p>
+                  </div>
+                  <div className="p-4 border rounded-lg">
+                    <h3 className="font-semibold mb-2">Cache Performance</h3>
+                    <p className="text-sm text-gray-600">Cache service operational</p>
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
         </main>
       </ThemeProvider>
     </ErrorBoundary>

@@ -2,6 +2,7 @@ import type { DIContainer } from "../container/DIContainer"
 import type { ILoggingService } from "./LoggingService"
 import { ServiceRegistry } from "./ServiceRegistry"
 import { EndpointChecker } from "./EndpointChecker"
+import { EnvironmentService } from "./EnvironmentService"
 
 export interface DiagnosticsReport {
   timestamp: string
@@ -31,6 +32,8 @@ export interface DiagnosticsReport {
     environment: string
     ready: boolean
     issues: string[]
+    baseUrl: string
+    apiBaseUrl: string
   }
   recommendations: string[]
 }
@@ -190,37 +193,15 @@ export class SystemDiagnostics {
   }
 
   private async getDeploymentInfo(): Promise<any> {
-    const issues: string[] = []
-    let ready = true
-
-    // Check environment
-    const environment = process.env.NODE_ENV || "unknown"
-    if (environment === "unknown") {
-      issues.push("NODE_ENV not set")
-      ready = false
-    }
-
-    // Check required environment variables
-    const requiredEnvVars = ["DATABASE_URL", "PHP_API_KEY", "PHP_ENDPOINT"]
-    for (const envVar of requiredEnvVars) {
-      if (!process.env[envVar]) {
-        issues.push(`Missing environment variable: ${envVar}`)
-        ready = false
-      }
-    }
-
-    // Check for sensitive data exposure
-    for (const key in process.env) {
-      if (key.startsWith("NEXT_PUBLIC_") && (key.includes("KEY") || key.includes("SECRET"))) {
-        issues.push(`Sensitive data exposed: ${key}`)
-        ready = false
-      }
-    }
+    const envService = EnvironmentService.getInstance()
+    const envInfo = envService.getEnvironmentInfo()
 
     return {
-      environment,
-      ready,
-      issues,
+      environment: envInfo.isDevelopment ? "development" : envInfo.isProduction ? "production" : "unknown",
+      ready: envService.isDeploymentReady(),
+      issues: envService.getIssues(),
+      baseUrl: envInfo.baseUrl,
+      apiBaseUrl: envInfo.apiBaseUrl,
     }
   }
 
