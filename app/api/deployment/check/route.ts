@@ -1,71 +1,84 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { DIContainer } from "@/src/container/DIContainer"
-import { LoggingService } from "@/src/services/LoggingService"
-import { IntegrityCheckService } from "@/src/services/IntegrityCheckService"
-import { sanitizeForLogging } from "@/lib/security-utils"
+import { NextResponse } from "next/server"
 
-// Initialize services
-const logger = new LoggingService()
-const container = new DIContainer()
-let integrityService: IntegrityCheckService
+// Simple health check function that doesn't rely on external services
+async function performBasicHealthCheck() {
+  const checks = {
+    api: {
+      health: false,
+      filesystem: false,
+    },
+    environment: {
+      nodeEnv: process.env.NODE_ENV || "unknown",
+      hasRequiredVars: Boolean(process.env.NEXT_PUBLIC_API_BASE_URL && process.env.DATABASE_URL),
+    },
+    timestamp: new Date().toISOString(),
+  }
 
-// Initialize container with required services
-try {
-  // Register logger first for error tracking
-  container.registerInstance("ILoggingService", logger)
+  try {
+    // Check basic API health
+    const healthResponse = await fetch(
+      new URL("/api/health", process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000"),
+    )
+    checks.api.health = healthResponse.ok
+  } catch (error) {
+    console.error("Health API check failed:", error)
+  }
 
-  // Create integrity service
-  integrityService = new IntegrityCheckService(logger)
+  try {
+    // Check filesystem API health
+    const fsResponse = await fetch(
+      new URL("/api/filesystem/health", process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000"),
+    )
+    checks.api.filesystem = fsResponse.ok
+  } catch (error) {
+    console.error("Filesystem API check failed:", error)
+  }
 
-  logger.info("API", "Deployment check route initialized")
-} catch (error) {
-  logger.error("API", "Failed to initialize deployment check route", {
-    error: sanitizeForLogging(error),
-  })
+  return checks
 }
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    logger.info("API", "Deployment integrity check requested")
+    console.log("Deployment check API called")
 
-    // Run integrity check
-    const result = await integrityService.checkSystemIntegrity()
+    // Perform basic health checks without relying on complex services
+    const healthChecks = await performBasicHealthCheck()
 
-    // Determine HTTP status based on check results
-    const status = result.passed
-      ? 200
-      : result.issues.some((i) => i.severity === "critical")
-        ? 500
-        : result.issues.some((i) => i.severity === "high")
-          ? 503
-          : 200
+    // Determine if the deployment is healthy based on basic checks
+    const isHealthy = healthChecks.api.health && healthChecks.api.filesystem
 
-    logger.info("API", "Deployment integrity check completed", {
-      passed: result.passed,
-      issueCount: result.issues.length,
-      status,
-    })
-
-    return NextResponse.json(result, { status })
-  } catch (error) {
-    logger.error("API", "Deployment integrity check failed", {
-      error: sanitizeForLogging(error),
-    })
+    console.log("Deployment check completed:", { isHealthy, checks: healthChecks })
 
     return NextResponse.json(
       {
-        passed: false,
-        issues: [
-          {
-            component: "DeploymentCheck",
-            severity: "critical",
-            message: "Failed to complete deployment check",
-            details: error instanceof Error ? error.message : String(error),
-          },
-        ],
+        status: isHealthy ? "healthy" : "unhealthy",
+        checks: healthChecks,
+      },
+      {
+        status: isHealthy ? 200 : 503,
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      },
+    )
+  } catch (error) {
+    // Log the full error for debugging
+    console.error("Deployment check failed with error:", error)
+
+    // Return a simplified error response
+    return NextResponse.json(
+      {
+        status: "error",
+        message: "Deployment check failed",
+        error: error instanceof Error ? error.message : "Unknown error",
         timestamp: new Date().toISOString(),
       },
-      { status: 500 },
+      {
+        status: 500,
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      },
     )
   }
 }

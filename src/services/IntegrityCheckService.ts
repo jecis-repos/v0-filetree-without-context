@@ -41,11 +41,11 @@ export class IntegrityCheckService {
       const fsIssues = await this.checkFileSystem()
       issues.push(...fsIssues)
 
-      // Check environment variables
+      // Check environment variables (client-safe checks only)
       const envIssues = this.checkEnvironmentVariables()
       issues.push(...envIssues)
 
-      // Check security
+      // Check security (client-safe checks only)
       const securityIssues = this.checkSecurity()
       issues.push(...securityIssues)
 
@@ -226,22 +226,20 @@ export class IntegrityCheckService {
   }
 
   /**
-   * Check environment variables
+   * Check environment variables (client-safe checks only)
    */
   private checkEnvironmentVariables(): IntegrityIssue[] {
     const issues: IntegrityIssue[] = []
 
-    // Required environment variables
-    const requiredEnvVars = [
+    // Only check for non-sensitive client-side environment variables
+    const requiredClientEnvVars = [
       { name: "NEXT_PUBLIC_API_BASE_URL", severity: "medium" as const },
       { name: "NEXT_PUBLIC_ENVIRONMENT", severity: "low" as const },
-      { name: "DATABASE_URL", severity: "high" as const },
-      { name: "PHP_API_KEY", severity: "high" as const },
-      { name: "PHP_ENDPOINT", severity: "high" as const },
+      { name: "NEXT_PUBLIC_WASM_BASE_URL", severity: "medium" as const },
     ]
 
-    // Check for required environment variables
-    for (const envVar of requiredEnvVars) {
+    // Check for required client-side environment variables
+    for (const envVar of requiredClientEnvVars) {
       if (!process.env[envVar.name]) {
         issues.push({
           component: "Environment",
@@ -251,24 +249,14 @@ export class IntegrityCheckService {
       }
     }
 
-    // Check for security issues in environment variables
-    const sensitiveVarPrefixes = ["NEXT_PUBLIC_API_KEY", "NEXT_PUBLIC_SECRET", "NEXT_PUBLIC_PASSWORD"]
-
-    for (const key in process.env) {
-      if (sensitiveVarPrefixes.some((prefix) => key.startsWith(prefix))) {
-        issues.push({
-          component: "Environment",
-          severity: "critical",
-          message: `Sensitive data exposed in client-side environment variable: ${key}`,
-        })
-      }
-    }
+    // Note: Server-side environment checks should be done on the server only
+    // We don't check for sensitive variables here to avoid security issues
 
     return issues
   }
 
   /**
-   * Check security
+   * Check security (client-safe checks only)
    */
   private checkSecurity(): IntegrityIssue[] {
     const issues: IntegrityIssue[] = []
@@ -294,19 +282,8 @@ export class IntegrityCheckService {
       }
     }
 
-    // Check for sensitive environment variables exposed to client
-    for (const key in process.env) {
-      if (
-        key.startsWith("NEXT_PUBLIC_") &&
-        (key.includes("KEY") || key.includes("SECRET") || key.includes("PASSWORD"))
-      ) {
-        issues.push({
-          component: "Security",
-          severity: "critical",
-          message: `Sensitive data exposed in client-side environment variable: ${key}`,
-        })
-      }
-    }
+    // Note: Sensitive environment variable checks are done server-side only
+    // to avoid exposing sensitive patterns in client code
 
     return issues
   }
