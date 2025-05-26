@@ -2,521 +2,223 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-
-    --radius: 0.5rem;
-  }
-
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
-  }
+/* CSS Custom Properties for theming */
+:root {
+  --background: 255 255 255;
+  --foreground: 0 0 0;
+  --card: 255 255 255;
+  --card-foreground: 0 0 0;
+  --popover: 255 255 255;
+  --popover-foreground: 0 0 0;
+  --primary: 99 102 241;
+  --primary-foreground: 255 255 255;
+  --secondary: 244 244 245;
+  --secondary-foreground: 39 39 42;
+  --muted: 244 244 245;
+  --muted-foreground: 113 113 122;
+  --accent: 244 244 245;
+  --accent-foreground: 39 39 42;
+  --destructive: 239 68 68;
+  --destructive-foreground: 255 255 255;
+  --border: 228 228 231;
+  --input: 228 228 231;
+  --ring: 99 102 241;
+  --radius: 0.5rem;
 }
 
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
+.dark {
+  --background: 0 0 0;
+  --foreground: 255 255 255;
+  --card: 0 0 0;
+  --card-foreground: 255 255 255;
+  --popover: 0 0 0;
+  --popover-foreground: 255 255 255;
+  --primary: 99 102 241;
+  --primary-foreground: 255 255 255;
+  --secondary: 39 39 42;
+  --secondary-foreground: 250 250 250;
+  --muted: 39 39 42;
+  --muted-foreground: 161 161 170;
+  --accent: 39 39 42;
+  --accent-foreground: 250 250 250;
+  --destructive: 239 68 68;
+  --destructive-foreground: 255 255 255;
+  --border: 39 39 42;
+  --input: 39 39 42;
+  --ring: 99 102 241;
 }
 
-/* File type icons */
-.file-icon {
-  @apply flex items-center justify-center w-6 h-6 rounded-sm;
+/* Base styles */
+* {
+  border-color: rgb(var(--border));
 }
 
-.file-icon-image {
-  @apply bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300;
-}
-
-.file-icon-document {
-  @apply bg-indigo-100 text-indigo-600 dark:bg-indigo-900 dark:text-indigo-300;
-}
-
-.file-icon-spreadsheet {
-  @apply bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-300;
-}
-
-.file-icon-presentation {
-  @apply bg-orange-100 text-orange-600 dark:bg-orange-900 dark:text-orange-300;
-}
-
-.file-icon-pdf {
-  @apply bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-300;
-}
-
-.file-icon-archive {
-  @apply bg-yellow-100 text-yellow-600 dark:bg-yellow-900 dark:text-yellow-300;
-}
-
-.file-icon-code {
-  @apply bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-300;
-}
-
-.file-icon-default {
-  @apply bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300;
-}
-
-/* File tree styles */
-.file-tree {
-  @apply text-sm;
-}
-
-.file-tree-item {
-  @apply flex items-center py-1 px-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded cursor-pointer transition-colors;
-}
-
-.file-tree-item-selected {
-  @apply bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-800/30;
-}
-
-.file-tree-item-icon {
-  @apply mr-2 flex-shrink-0;
-}
-
-.file-tree-item-name {
-  @apply truncate flex-grow;
-}
-
-.file-tree-item-meta {
-  @apply text-xs text-gray-500 dark:text-gray-400 ml-2;
-}
-
-/* Image preview */
-.image-preview {
-  @apply rounded-md overflow-hidden border border-gray-200 dark:border-gray-700;
-}
-
-/* Breadcrumb */
-.breadcrumb {
-  @apply flex items-center text-sm text-gray-600 dark:text-gray-400 mb-4;
-}
-
-.breadcrumb-item {
-  @apply hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer;
-}
-
-.breadcrumb-separator {
-  @apply mx-2 text-gray-400 dark:text-gray-600;
-}
-
-/* Animations */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.animate-fade-in {
-  animation: fadeIn 0.3s ease-in-out;
-}
-
-@keyframes slideIn {
-  from {
-    transform: translateY(10px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-.animate-slide-in {
-  animation: slideIn 0.3s ease-out;
-}
-
-/* Loading spinner */
-.spinner {
-  @apply animate-spin rounded-full border-b-2 border-blue-500;
-}
-
-/* Theme-specific overrides */
-.theme-blue .file-tree-item-selected {
-  @apply bg-blue-100 dark:bg-blue-900/30;
-}
-
-.theme-purple .file-tree-item-selected {
-  @apply bg-purple-100 dark:bg-purple-900/30;
-}
-
-.theme-green .file-tree-item-selected {
-  @apply bg-green-100 dark:bg-green-900/30;
-}
-
-.theme-orange .file-tree-item-selected {
-  @apply bg-orange-100 dark:bg-orange-900/30;
-}
-
-.theme-neutral .file-tree-item-selected {
-  @apply bg-gray-100 dark:bg-gray-800;
-}
-
-/* Button variants for different themes */
-.theme-blue .btn-primary {
-  @apply bg-blue-600 hover:bg-blue-700 text-white;
-}
-
-.theme-purple .btn-primary {
-  @apply bg-purple-600 hover:bg-purple-700 text-white;
-}
-
-.theme-green .btn-primary {
-  @apply bg-green-600 hover:bg-green-700 text-white;
-}
-
-.theme-orange .btn-primary {
-  @apply bg-orange-600 hover:bg-orange-700 text-white;
-}
-
-.theme-neutral .btn-primary {
-  @apply bg-gray-600 hover:bg-gray-700 text-white;
-}
-
-/* File Preview Styles */
-.directory-preview {
-  font-feature-settings: "liga" 1, "calt" 1;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-.file-node-preview {
-  transition: background-color 0.15s ease;
-}
-
-.file-node-preview:hover {
-  background-color: var(--hover-color, rgba(0, 0, 0, 0.05));
-}
-
-/* Theme-specific preview styles */
-.preview-modern {
-  --hover-color: #f9fafb;
-}
-
-.preview-dark {
-  --hover-color: #1e293b;
-}
-
-.preview-minimal {
-  --hover-color: #f7fafc;
-}
-
-.preview-terminal {
-  --hover-color: #1a1a1a;
-}
-
-.preview-elegant {
-  --hover-color: #f5f4f2;
-}
-
-/* Preview scaling */
-.preview-container {
-  overflow: auto;
-  position: relative;
-}
-
-.preview-content {
-  transform-origin: top left;
-  transition: transform 0.2s ease;
-}
-
-/* File type indicators */
-.file-type-indicator {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin-right: 6px;
-}
-
-.file-type-js {
-  background-color: #f7df1e;
-}
-.file-type-ts {
-  background-color: #3178c6;
-}
-.file-type-html {
-  background-color: #e34f26;
-}
-.file-type-css {
-  background-color: #1572b6;
-}
-.file-type-json {
-  background-color: #000000;
-}
-.file-type-md {
-  background-color: #083fa1;
-}
-.file-type-png,
-.file-type-jpg,
-.file-type-jpeg {
-  background-color: #ff6b6b;
-}
-.file-type-pdf {
-  background-color: #ff0000;
-}
-.file-type-default {
-  background-color: #6b7280;
-}
-
-/* Export preview overlay */
-.export-preview-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(255, 255, 255, 0.9);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
+body {
+  color: rgb(var(--foreground));
+  background: rgb(var(--background));
+  font-feature-settings: "rlig" 1, "calt" 1;
 }
 
 /* Mobile-first responsive design */
 @media (max-width: 640px) {
-  .directory-preview {
-    font-size: 11px;
-    padding: 4px;
-    line-height: 1.3;
+  .container {
+    padding-left: 1rem;
+    padding-right: 1rem;
   }
 
-  .file-node-preview {
-    padding: 1px 0;
-    font-size: 11px;
-  }
-
-  .file-tree-item {
-    padding: 6px 8px;
-    font-size: 13px;
-  }
-
-  .file-tree-item-icon {
-    margin-right: 6px;
-  }
-
-  /* Mobile theme adjustments */
-  .theme-blue .file-tree-item-selected,
-  .theme-purple .file-tree-item-selected,
-  .theme-green .file-tree-item-selected,
-  .theme-orange .file-tree-item-selected,
-  .theme-neutral .file-tree-item-selected {
-    padding: 8px;
-    border-radius: 6px;
-  }
-
-  /* Mobile button adjustments */
-  .theme-blue .btn-primary,
-  .theme-purple .btn-primary,
-  .theme-green .btn-primary,
-  .theme-orange .btn-primary,
-  .theme-neutral .btn-primary {
-    padding: 8px 12px;
-    font-size: 14px;
-    min-height: 44px; /* Touch target size */
-  }
-
-  /* Mobile card adjustments */
-  .card {
-    margin: 8px;
-    border-radius: 8px;
-  }
-
-  /* Mobile spacing */
-  .space-y-6 > * + * {
-    margin-top: 1rem;
-  }
-
-  .space-y-4 > * + * {
-    margin-top: 0.75rem;
-  }
-
-  .space-y-2 > * + * {
-    margin-top: 0.5rem;
-  }
-
-  /* Mobile grid adjustments */
-  .grid-cols-3 {
+  .grid {
     grid-template-columns: 1fr;
-    gap: 0.5rem;
+    gap: 1rem;
   }
 
-  .grid-cols-2 {
-    grid-template-columns: 1fr;
-    gap: 0.5rem;
-  }
-
-  .md\:grid-cols-3 {
-    grid-template-columns: 1fr;
-  }
-
-  .md\:col-span-1,
-  .md\:col-span-2 {
-    grid-column: span 1;
-  }
-
-  /* Mobile text adjustments */
-  .text-3xl {
-    font-size: 1.5rem;
-    line-height: 2rem;
-  }
-
-  .text-sm {
-    font-size: 0.75rem;
-  }
-
-  .text-xs {
-    font-size: 0.625rem;
+  .text-responsive {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
   }
 }
 
 @media (min-width: 641px) and (max-width: 768px) {
-  .directory-preview {
-    font-size: 12px;
-    padding: 6px;
-  }
-
-  .file-node-preview {
-    padding: 2px 0;
-    font-size: 12px;
-  }
-
-  .grid-cols-3 {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .md\:grid-cols-3 {
+  .grid-responsive {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
 @media (min-width: 769px) {
-  .directory-preview {
-    font-size: 14px;
-    padding: 8px;
-  }
-
-  .file-node-preview {
-    padding: 3px 0;
-    font-size: 14px;
+  .grid-responsive {
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 
-/* Touch-friendly improvements */
-@media (hover: none) and (pointer: coarse) {
-  .file-tree-item,
-  .breadcrumb-item,
-  button {
+/* Dark mode specific styles */
+.dark .bg-card {
+  background-color: rgb(var(--card));
+}
+
+.dark .text-card-foreground {
+  color: rgb(var(--card-foreground));
+}
+
+.dark .border-border {
+  border-color: rgb(var(--border));
+}
+
+/* Theme-specific color schemes */
+.theme-blue {
+  --primary: 59 130 246;
+  --ring: 59 130 246;
+}
+
+.theme-purple {
+  --primary: 147 51 234;
+  --ring: 147 51 234;
+}
+
+.theme-green {
+  --primary: 34 197 94;
+  --ring: 34 197 94;
+}
+
+.theme-orange {
+  --primary: 249 115 22;
+  --ring: 249 115 22;
+}
+
+.theme-neutral {
+  --primary: 107 114 128;
+  --ring: 107 114 128;
+}
+
+/* Accessibility improvements */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (prefers-contrast: high) {
+  :root {
+    --border: 0 0 0;
+    --ring: 0 0 0;
+  }
+
+  .dark {
+    --border: 255 255 255;
+    --ring: 255 255 255;
+  }
+}
+
+/* Focus styles for accessibility */
+*:focus-visible {
+  outline: 2px solid rgb(var(--ring));
+  outline-offset: 2px;
+}
+
+/* Touch targets for mobile */
+@media (max-width: 768px) {
+  button,
+  [role="button"],
+  input,
+  select,
+  textarea {
     min-height: 44px;
     min-width: 44px;
   }
+}
 
-  .file-tree-item:hover,
-  .breadcrumb-item:hover {
-    background-color: transparent;
+/* Smooth transitions */
+* {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+/* Loading states */
+.loading {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
   }
-
-  .file-tree-item:active,
-  .breadcrumb-item:active {
-    background-color: var(--accent-color, rgba(0, 0, 0, 0.1));
-    transform: scale(0.98);
+  50% {
+    opacity: 0.5;
   }
 }
 
-/* High contrast mode support */
-@media (prefers-contrast: high) {
-  .file-tree-item-selected {
-    border: 2px solid currentColor;
-  }
-
-  .theme-blue .file-tree-item-selected,
-  .theme-purple .file-tree-item-selected,
-  .theme-green .file-tree-item-selected,
-  .theme-orange .file-tree-item-selected,
-  .theme-neutral .file-tree-item-selected {
-    border: 2px solid;
-    font-weight: 600;
-  }
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
 }
 
-/* Reduced motion support */
-@media (prefers-reduced-motion: reduce) {
-  .animate-fade-in,
-  .animate-slide-in,
-  .spinner,
-  .transition-colors,
-  .file-node-preview {
-    animation: none;
-    transition: none;
-  }
+::-webkit-scrollbar-track {
+  background: rgb(var(--muted));
 }
 
-/* Dark mode improvements */
-@media (prefers-color-scheme: dark) {
-  .file-type-indicator {
-    border: 1px solid rgba(255, 255, 255, 0.2);
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--muted-foreground));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--foreground));
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
   }
 
-  .export-preview-overlay {
-    background: rgba(0, 0, 0, 0.9);
-    color: white;
+  body {
+    background: white !important;
+    color: black !important;
   }
 }

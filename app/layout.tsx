@@ -2,13 +2,16 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
+import { ThemeProvider } from "@/src/styles/ThemeProvider"
+import { ThemeToggle } from "@/src/components/ThemeToggle"
+import { ColorSchemeSelector } from "@/src/components/ColorSchemeSelector"
 
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: "Enterprise File Explorer",
   description: "Advanced file system explorer with multiple providers",
-    generator: 'v0.dev'
+  generator: "v0.dev",
 }
 
 export default function RootLayout({
@@ -17,23 +20,27 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
-        <div className="min-h-screen bg-gray-50">
-          <header className="bg-white shadow-sm border-b">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <div className="flex justify-between items-center py-4">
-                <div className="flex items-center">
-                  <h1 className="text-2xl font-bold text-gray-900">Enterprise File Explorer</h1>
-                </div>
-                <div className="flex items-center space-x-4">
-                  <span className="text-sm text-gray-500">v1.0.0</span>
+        <ThemeProvider>
+          <div className="min-h-screen bg-background text-foreground">
+            <header className="bg-card shadow-sm border-b border-border">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="flex justify-between items-center py-4">
+                  <div className="flex items-center">
+                    <h1 className="text-2xl font-bold text-foreground">Enterprise File Explorer</h1>
+                  </div>
+                  <div className="flex items-center space-x-4">
+                    <ColorSchemeSelector />
+                    <ThemeToggle />
+                    <span className="text-sm text-muted-foreground">v1.0.0</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          </header>
-          <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">{children}</main>
-        </div>
+            </header>
+            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">{children}</main>
+          </div>
+        </ThemeProvider>
       </body>
     </html>
   )

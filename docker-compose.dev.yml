@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/fileexplorer
+      - PHP_ENDPOINT=http://php:8080
+    depends_on:
+      - postgres
+      - php
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: fileexplorer
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  php:
+    image: php:8.2-fpm-alpine
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./php:/var/www/html
+
+volumes:
+  postgres_dev_data:
