@@ -89,24 +89,292 @@ export class FileImporter implements IFileImporter {
   }
 
   validateImportData(data: any): boolean {
-    // Check if data is an array
-    if (!Array.isArray(data) && !this.isValidFileNode(data)) {
-      return false
+    // Check if data is an array (hierarchical structure)
+    if (Array.isArray(data)) {
+      return data.every((node) => this.isValidFileNode(node))
     }
 
-    // If it's a single node, convert to array for validation
-    const nodes = Array.isArray(data) ? data : [data]
+    // Check if data has the flat file paths format (like the example URL)
+    if (data && typeof data === "object") {
+      // Check for the specific format: { name: string, filepaths: string[] }
+      if (typeof data.name === "string" && Array.isArray(data.filepaths)) {
+        return data.filepaths.every((path: any) => typeof path === "string" && path.trim() !== "")
+      }
 
-    // Validate each node recursively
-    return nodes.every((node) => this.isValidFileNode(node))
+      // Check if it's a single file node
+      if (this.isValidFileNode(data)) {
+        return true
+      }
+    }
+
+    return false
   }
 
   sanitizeImportData(data: any): FileNode[] {
-    // If data is a single node, convert to array
-    const nodes = Array.isArray(data) ? data : [data]
+    // Handle flat file paths format (like the example URL)
+    if (data && typeof data === "object" && data.filepaths && Array.isArray(data.filepaths)) {
+      return this.convertFilePathsToTree(data.filepaths, data.name || "Imported")
+    }
 
-    // Sanitize each node recursively
-    return nodes.map((node) => this.sanitizeNode(node))
+    // Handle hierarchical structure
+    if (Array.isArray(data)) {
+      return data.map((node) => this.sanitizeNode(node))
+    }
+
+    // Handle single node
+    if (this.isValidFileNode(data)) {
+      return [this.sanitizeNode(data)]
+    }
+
+    throw new Error("Unsupported data format")
+  }
+
+  private convertFilePathsToTree(filepaths: string[], rootName?: string): FileNode[] {
+    const root: FileNode = {
+      id: "root",
+      name: rootName || "root",
+      type: "directory",
+      path: "/",
+      children: [],
+      lastModified: new Date(),
+    }
+
+    // Create a map to store directory nodes for quick lookup
+    const nodeMap = new Map<string, FileNode>()
+    nodeMap.set("/", root)
+
+    // Sort paths to ensure parent directories are created before children
+    const sortedPaths = [...filepaths].sort()
+
+    for (const filepath of sortedPaths) {
+      if (!filepath || filepath.trim() === "") continue
+
+      // Normalize the path
+      const normalizedPath = this.normalizePath(filepath)
+      const pathParts = normalizedPath.split("/").filter(Boolean)
+
+      // Create all parent directories
+      let currentPath = ""
+      for (let i = 0; i < pathParts.length - 1; i++) {
+        const part = pathParts[i]
+        const parentPath = currentPath || "/"
+        currentPath = currentPath ? `${currentPath}/${part}` : `/${part}`
+
+        if (!nodeMap.has(currentPath)) {
+          const dirNode: FileNode = {
+            id: this.generateId(),
+            name: part,
+            type: "directory",
+            path: currentPath,
+            children: [],
+            lastModified: new Date(),
+          }
+
+          nodeMap.set(currentPath, dirNode)
+
+          // Add to parent
+          const parent = nodeMap.get(parentPath)
+          if (parent && parent.children) {
+            parent.children.push(dirNode)
+          }
+        }
+      }
+
+      // Create the file node
+      const fileName = pathParts[pathParts.length - 1]
+      const filePath = normalizedPath
+      const parentPath = pathParts.length > 1 ? "/" + pathParts.slice(0, -1).join("/") : "/"
+
+      // Determine file size and type
+      const fileSize = this.estimateFileSize(fileName)
+      const mimeType = this.getMimeTypeFromFileName(fileName)
+
+      const fileNode: FileNode = {
+        id: this.generateId(),
+        name: fileName,
+        type: "file",
+        path: filePath,
+        size: fileSize,
+        lastModified: new Date(),
+        mimeType,
+      }
+
+      // Add thumbnail for images
+      if (mimeType.startsWith("image/")) {
+        fileNode.thumbnailUrl = this.generatePlaceholderThumbnail(fileName)
+        fileNode.previewUrl = fileNode.thumbnailUrl
+      }
+
+      // Add to parent directory
+      const parent = nodeMap.get(parentPath)
+      if (parent && parent.children) {
+        parent.children.push(fileNode)
+      }
+    }
+
+    // Return the children of the root (or root itself if it has a custom name)
+    return rootName ? [root] : root.children || []
+  }
+
+  private normalizePath(path: string): string {
+    // Remove leading/trailing whitespace
+    let normalized = path.trim()
+
+    // Convert backslashes to forward slashes
+    normalized = normalized.replace(/\\/g, "/")
+
+    // Ensure path starts with /
+    if (!normalized.startsWith("/")) {
+      normalized = "/" + normalized
+    }
+
+    // Remove duplicate slashes
+    normalized = normalized.replace(/\/+/g, "/")
+
+    // Remove trailing slash (except for root)
+    if (normalized.length > 1 && normalized.endsWith("/")) {
+      normalized = normalized.slice(0, -1)
+    }
+
+    return normalized
+  }
+
+  private estimateFileSize(fileName: string): number {
+    const extension = this.getFileExtension(fileName)
+
+    // Estimate file sizes based on common file types
+    const sizeEstimates: Record<string, number> = {
+      // Text files
+      txt: 1024,
+      md: 2048,
+      json: 1536,
+      xml: 2048,
+      csv: 4096,
+
+      // Code files
+      js: 3072,
+      ts: 3584,
+      jsx: 4096,
+      tsx: 4608,
+      html: 2048,
+      css: 1536,
+      scss: 2048,
+      py: 2560,
+      java: 4096,
+      cpp: 3584,
+      c: 2560,
+      h: 1024,
+
+      // Config files
+      gitignore: 512,
+      editorconfig: 256,
+      prettierrc: 128,
+
+      // Package files
+      "package.json": 2048,
+      "yarn.lock": 51200, // Usually larger
+      "package-lock.json": 102400, // Usually much larger
+
+      // Documentation
+      readme: 4096,
+
+      // Images
+      png: 51200,
+      jpg: 76800,
+      jpeg: 76800,
+      gif: 25600,
+      svg: 2048,
+
+      // Archives
+      zip: 1048576,
+      tar: 2097152,
+      gz: 524288,
+    }
+
+    // Check for specific filenames first
+    const lowerFileName = fileName.toLowerCase()
+    if (lowerFileName === "package.json") return sizeEstimates["package.json"]
+    if (lowerFileName === "yarn.lock") return sizeEstimates["yarn.lock"]
+    if (lowerFileName === "package-lock.json") return sizeEstimates["package-lock.json"]
+    if (lowerFileName.includes("readme")) return sizeEstimates.readme
+    if (lowerFileName === ".gitignore") return sizeEstimates.gitignore
+    if (lowerFileName === ".editorconfig") return sizeEstimates.editorconfig
+    if (lowerFileName === ".prettierrc") return sizeEstimates.prettierrc
+
+    // Use extension-based estimation
+    if (extension && sizeEstimates[extension]) {
+      return sizeEstimates[extension]
+    }
+
+    // Default size for unknown files
+    return 1024
+  }
+
+  private getMimeTypeFromFileName(fileName: string): string {
+    const extension = this.getFileExtension(fileName)
+    if (!extension) return "application/octet-stream"
+
+    const mimeTypes: Record<string, string> = {
+      // Images
+      jpg: "image/jpeg",
+      jpeg: "image/jpeg",
+      png: "image/png",
+      gif: "image/gif",
+      webp: "image/webp",
+      svg: "image/svg+xml",
+
+      // Documents
+      pdf: "application/pdf",
+      doc: "application/msword",
+      docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+
+      // Spreadsheets
+      xls: "application/vnd.ms-excel",
+      xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+
+      // Presentations
+      ppt: "application/vnd.ms-powerpoint",
+      pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+
+      // Text
+      txt: "text/plain",
+      md: "text/markdown",
+      csv: "text/csv",
+
+      // Code
+      html: "text/html",
+      css: "text/css",
+      js: "application/javascript",
+      jsx: "application/javascript",
+      ts: "application/typescript",
+      tsx: "application/typescript",
+      json: "application/json",
+      xml: "application/xml",
+      py: "text/x-python",
+      java: "text/x-java-source",
+      cpp: "text/x-c++src",
+      c: "text/x-csrc",
+      h: "text/x-chdr",
+
+      // Archives
+      zip: "application/zip",
+      rar: "application/x-rar-compressed",
+      "7z": "application/x-7z-compressed",
+      tar: "application/x-tar",
+      gz: "application/gzip",
+    }
+
+    return mimeTypes[extension] || "application/octet-stream"
+  }
+
+  private getFileExtension(fileName: string): string | null {
+    const parts = fileName.split(".")
+    return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : null
+  }
+
+  private generatePlaceholderThumbnail(fileName: string): string {
+    const extension = this.getFileExtension(fileName) || ""
+    return `/placeholder.svg?height=100&width=100&query=image+file+${extension}`
   }
 
   private isValidFileNode(node: any): boolean {
@@ -162,6 +430,20 @@ export class FileImporter implements IFileImporter {
     // Add permissions if present
     if (typeof node.permissions === "string") {
       sanitized.permissions = node.permissions
+    }
+
+    // Add MIME type if present
+    if (typeof node.mimeType === "string") {
+      sanitized.mimeType = node.mimeType
+    }
+
+    // Add thumbnail URLs if present
+    if (typeof node.thumbnailUrl === "string") {
+      sanitized.thumbnailUrl = node.thumbnailUrl
+    }
+
+    if (typeof node.previewUrl === "string") {
+      sanitized.previewUrl = node.previewUrl
     }
 
     // Process children recursively
