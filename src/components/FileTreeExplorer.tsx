@@ -10,13 +10,27 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
-import { Folder, File, Search, Upload, Download, Plus, RefreshCw, ChevronRight, BarChart3 } from "lucide-react"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import {
+  Folder,
+  File,
+  Search,
+  Upload,
+  Download,
+  Plus,
+  RefreshCw,
+  ChevronRight,
+  BarChart3,
+  Terminal,
+} from "lucide-react"
 import { useTheme } from "../styles/ThemeProvider"
 import { FileImportPanel } from "./FileImportPanel"
 import { FilePreview } from "./FilePreview"
 import { BenchmarkPanel } from "./BenchmarkPanel"
+import { ImageExportPanel } from "./ImageExportPanel"
 import type { DIContainer } from "../container/DIContainer"
 import type { FileNode, FileSystemStats } from "../interfaces/IFileSystemProvider"
+import type { LogEntry } from "../services/LoggingService"
 
 interface FileTreeExplorerProps {
   container: DIContainer
@@ -35,10 +49,16 @@ export const FileTreeExplorer: React.FC<FileTreeExplorerProps> = ({ container })
   const [loading, setLoading] = useState(false)
   const [currentProvider, setCurrentProvider] = useState("Memory")
   const [activeTab, setActiveTab] = useState("explorer")
+  const [logs, setLogs] = useState<LogEntry[]>([])
+  const [logFilter, setLogFilter] = useState<string>("all")
 
   const loadFileTree = useCallback(async () => {
     setLoading(true)
+    const logger = container.resolve("ILoggingService")
+
     try {
+      logger.info("UI", "Loading file tree", { provider: currentProvider })
+
       const fileSystemProvider = container.resolve("IFileSystemProvider")
       await fileSystemProvider.initialize()
       const tree = await fileSystemProvider.getFileTree()
@@ -46,16 +66,45 @@ export const FileTreeExplorer: React.FC<FileTreeExplorerProps> = ({ container })
 
       setFileTree(tree)
       setStats(fileStats)
+
+      logger.info("UI", "File tree loaded successfully", {
+        nodeCount: tree.length,
+        totalFiles: fileStats.totalFiles,
+        totalDirectories: fileStats.totalDirectories,
+      })
     } catch (error) {
+      logger.error("UI", "Failed to load file tree", { error: error.message })
       console.error("Failed to load file tree:", error)
     } finally {
       setLoading(false)
     }
-  }, [container])
+  }, [container, currentProvider])
+
+  const refreshLogs = useCallback(() => {
+    try {
+      const logger = container.resolve("ILoggingService")
+      const allLogs = logger.getLogs()
+
+      let filteredLogs = allLogs
+      if (logFilter !== "all") {
+        filteredLogs = logger.getLogs(logFilter as any)
+      }
+
+      setLogs(filteredLogs.slice(-100)) // Show last 100 logs
+    } catch (error) {
+      console.error("Failed to refresh logs:", error)
+    }
+  }, [container, logFilter])
 
   useEffect(() => {
     loadFileTree()
   }, [loadFileTree, currentProvider])
+
+  useEffect(() => {
+    refreshLogs()
+    const interval = setInterval(refreshLogs, 2000) // Refresh logs every 2 seconds
+    return () => clearInterval(interval)
+  }, [refreshLogs])
 
   const toggleNode = (nodeId: string) => {
     const newExpanded = new Set(expandedNodes)
@@ -68,6 +117,9 @@ export const FileTreeExplorer: React.FC<FileTreeExplorerProps> = ({ container })
   }
 
   const handleNodeClick = (node: FileNode) => {
+    const logger = container.resolve("ILoggingService")
+    logger.debug("UI", "Node clicked", { path: node.path, type: node.type })
+
     setSelectedNode(node)
 
     if (node.type === "directory") {
@@ -85,17 +137,28 @@ export const FileTreeExplorer: React.FC<FileTreeExplorerProps> = ({ container })
       return
     }
 
+    const logger = container.resolve("ILoggingService")
     setIsSearching(true)
+
     try {
+      logger.info("UI", "Starting search", { query: searchQuery })
+
       const fileSystemProvider = container.resolve("IFileSystemProvider")
       const results = await fileSystemProvider.searchFiles({
         query: searchQuery,
         matchCase: false,
         includeContent: true,
       })
+
       setSearchResults(results)
       setActiveTab("search")
+
+      logger.info("UI", "Search completed", {
+        query: searchQuery,
+        resultCount: results.length,
+      })
     } catch (error) {
+      logger.error("UI", "Search failed", { query: searchQuery, error: error.message })
       console.error("Search failed:", error)
     } finally {
       setIsSearching(false)
@@ -103,12 +166,19 @@ export const FileTreeExplorer: React.FC<FileTreeExplorerProps> = ({ container })
   }
 
   const handleImport = async (nodes: FileNode[]) => {
+    const logger = container.resolve("ILoggingService")
     setLoading(true)
+
     try {
+      logger.info("UI", "Starting file tree import", { nodeCount: nodes.length })
+
       const fileSystemProvider = container.resolve("IFileSystemProvider")
       await fileSystemProvider.importFileTree(nodes)
       await loadFileTree()
+
+      logger.info("UI", "File tree import completed successfully")
     } catch (error) {
+      logger.error("UI", "File tree import failed", { error: error.message })
       console.error("Import failed:", error)
     } finally {
       setLoading(false)
@@ -116,11 +186,62 @@ export const FileTreeExplorer: React.FC<FileTreeExplorerProps> = ({ container })
   }
 
   const switchProvider = async (providerType: string) => {
+    const logger = container.resolve("ILoggingService")
+    logger.info("UI", "Switching provider", { from: currentProvider, to: providerType })
+
     setCurrentProvider(providerType)
     setSelectedNode(null)
     setExpandedNodes(new Set())
     setSearchResults([])
     setCurrentPath([])
+
+    // Update the DI container to use the new provider
+    try {
+      if (providerType === "WASM") {
+        const wasmProvider = container.resolve("WasmFileSystemProvider")
+        container.registerInstance("IFileSystemProvider", wasmProvider)
+      } else {
+        // Default to Memory provider
+        const memoryProvider =
+          container.resolve("MemoryFileSystemProvider") ||
+          new (await import("../providers/MemoryFileSystemProvider")).MemoryFileSystemProvider(
+            container.resolve("IPerformanceMonitor"),
+          )
+        container.registerInstance("IFileSystemProvider", memoryProvider)
+      }
+
+      logger.info("UI", "Provider switched successfully", { provider: providerType })
+    } catch (error) {
+      logger.error("UI", "Failed to switch provider", { provider: providerType, error: error.message })
+    }
+  }
+
+  const clearLogs = () => {
+    try {
+      const logger = container.resolve("ILoggingService")
+      logger.clearLogs()
+      setLogs([])
+    } catch (error) {
+      console.error("Failed to clear logs:", error)
+    }
+  }
+
+  const exportLogs = () => {
+    try {
+      const logger = container.resolve("ILoggingService")
+      const logsJson = logger.exportLogs()
+      const blob = new Blob([logsJson], { type: "application/json" })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `file-explorer-logs-${new Date().toISOString().slice(0, 19)}.json`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error("Failed to export logs:", error)
+    }
   }
 
   const navigateToBreadcrumb = (index: number) => {
@@ -252,6 +373,70 @@ export const FileTreeExplorer: React.FC<FileTreeExplorerProps> = ({ container })
     )
   }
 
+  const renderLogs = () => {
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Select value={logFilter} onValueChange={setLogFilter}>
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Logs</SelectItem>
+                <SelectItem value="error">Errors</SelectItem>
+                <SelectItem value="warn">Warnings</SelectItem>
+                <SelectItem value="info">Info</SelectItem>
+                <SelectItem value="debug">Debug</SelectItem>
+              </SelectContent>
+            </Select>
+            <Badge variant="outline">{logs.length} entries</Badge>
+          </div>
+          <div className="flex space-x-2">
+            <Button variant="outline" size="sm" onClick={exportLogs}>
+              <Download className="h-4 w-4 mr-1" />
+              Export
+            </Button>
+            <Button variant="outline" size="sm" onClick={clearLogs}>
+              Clear
+            </Button>
+          </div>
+        </div>
+
+        <ScrollArea className="h-[400px] border rounded p-2">
+          <div className="space-y-1">
+            {logs.map((log, index) => (
+              <div
+                key={index}
+                className={`text-xs p-2 rounded font-mono ${
+                  log.level === "error"
+                    ? "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300"
+                    : log.level === "warn"
+                      ? "bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300"
+                      : log.level === "info"
+                        ? "bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300"
+                        : "bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold">
+                    [{log.category}] {log.message}
+                  </span>
+                  <span className="text-xs opacity-70">{log.timestamp.toLocaleTimeString()}</span>
+                </div>
+                {log.data && (
+                  <div className="mt-1 text-xs opacity-80">
+                    {typeof log.data === "object" ? JSON.stringify(log.data, null, 2) : log.data}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
+      </div>
+    )
+  }
+
   return (
     <div className="w-full max-w-7xl mx-auto p-4 space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -374,9 +559,11 @@ export const FileTreeExplorer: React.FC<FileTreeExplorerProps> = ({ container })
           <FilePreview file={selectedNode} container={container} />
 
           <Tabs defaultValue="stats">
-            <TabsList className="grid grid-cols-2">
+            <TabsList className="grid grid-cols-4">
               <TabsTrigger value="stats">Statistics</TabsTrigger>
               <TabsTrigger value="benchmark">Benchmark</TabsTrigger>
+              <TabsTrigger value="export">Export</TabsTrigger>
+              <TabsTrigger value="logs">Logs</TabsTrigger>
             </TabsList>
 
             <TabsContent value="stats">
@@ -453,6 +640,22 @@ export const FileTreeExplorer: React.FC<FileTreeExplorerProps> = ({ container })
 
             <TabsContent value="benchmark">
               <BenchmarkPanel container={container} />
+            </TabsContent>
+
+            <TabsContent value="export">
+              <ImageExportPanel fileTree={fileTree} container={container} />
+            </TabsContent>
+
+            <TabsContent value="logs">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <Terminal className="mr-2 h-5 w-5" />
+                    System Logs
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>{renderLogs()}</CardContent>
+              </Card>
             </TabsContent>
           </Tabs>
         </div>
