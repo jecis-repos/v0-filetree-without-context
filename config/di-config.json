@@ -1,0 +1,33 @@
+{
+  "providers": {
+    "wasmProvider": {
+      "class": "WasmFileSystemProvider",
+      "singleton": true
+    },
+    "memoryProvider": {
+      "class": "MemoryFileSystemProvider",
+      "singleton": true
+    },
+    "cacheService": {
+      "class": "CacheService",
+      "singleton": true
+    },
+    "performanceMonitor": {
+      "class": "PerformanceMonitor",
+      "singleton": true
+    }
+  },
+  "services": {
+    "fileSystemCalculator": {
+      "class": "FileSystemCalculator",
+      "singleton": true,
+      "dependencies": ["fileSystemProvider", "cacheService"]
+    },
+    "fileSystemManipulator": {
+      "class": "FileSystemManipulator",
+      "singleton": true,
+      "dependencies": ["fileSystemProvider", "cacheService"]
+    }
+  },
+  "defaultProvider": "wasmProvider"
+}
