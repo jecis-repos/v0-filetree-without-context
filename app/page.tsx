@@ -1,12 +1,15 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { ThemeProvider } from "../src/styles/ThemeProvider"
 import { FileTreeExplorer } from "../src/components/FileTreeExplorer"
 import { DIContainer } from "../src/container/DIContainer"
 import { CacheService } from "../src/services/CacheService"
 import { PerformanceMonitor } from "../src/services/PerformanceMonitor"
 import { FileSystemCalculator } from "../src/services/FileSystemCalculator"
 import { MemoryFileSystemProvider } from "../src/providers/MemoryFileSystemProvider"
+import { FileImporter } from "../src/services/FileImporter"
+import { BenchmarkService } from "../src/services/BenchmarkService"
 
 export default function HomePage() {
   const [container, setContainer] = useState<DIContainer | null>(null)
@@ -27,6 +30,26 @@ export default function HomePage() {
           () => {
             const cache = diContainer.resolve("ICacheService")
             return new FileSystemCalculator(cache)
+          },
+          "singleton",
+        )
+
+        // Register file importer
+        diContainer.registerFactory(
+          "IFileImporter",
+          () => {
+            const monitor = diContainer.resolve("IPerformanceMonitor")
+            return new FileImporter(monitor)
+          },
+          "singleton",
+        )
+
+        // Register benchmark service
+        diContainer.registerFactory(
+          "BenchmarkService",
+          () => {
+            const monitor = diContainer.resolve("IPerformanceMonitor")
+            return new BenchmarkService(monitor)
           },
           "singleton",
         )
@@ -79,5 +102,9 @@ export default function HomePage() {
     )
   }
 
-  return <FileTreeExplorer container={container} />
+  return (
+    <ThemeProvider>
+      <FileTreeExplorer container={container} />
+    </ThemeProvider>
+  )
 }

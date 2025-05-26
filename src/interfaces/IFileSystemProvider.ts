@@ -8,6 +8,9 @@ export interface FileNode {
   lastModified?: Date
   permissions?: string
   metadata?: Record<string, any>
+  mimeType?: string
+  thumbnailUrl?: string
+  previewUrl?: string
 }
 
 export interface FileSystemStats {
@@ -16,6 +19,24 @@ export interface FileSystemStats {
   totalSize: number
   maxDepth: number
   largestFile?: FileNode
+  fileTypes?: Record<string, number>
+  averageFileSize?: number
+  creationDate?: Date
+  lastModifiedDate?: Date
+}
+
+export interface FileOperationResult {
+  success: boolean
+  error?: string
+}
+
+export interface FileSearchOptions {
+  query: string
+  matchCase?: boolean
+  matchWholeWord?: boolean
+  includeContent?: boolean
+  fileTypes?: string[]
+  maxResults?: number
 }
 
 export interface IFileSystemProvider {
@@ -23,10 +44,16 @@ export interface IFileSystemProvider {
   initialize(): Promise<void>
   getFileTree(): Promise<FileNode[]>
   getNode(path: string): Promise<FileNode | null>
-  createDirectory(path: string): Promise<void>
-  deleteNode(path: string): Promise<void>
-  moveNode(fromPath: string, toPath: string): Promise<void>
-  copyNode(fromPath: string, toPath: string): Promise<void>
+  createDirectory(path: string): Promise<FileOperationResult>
+  createFile(path: string, content?: string | ArrayBuffer): Promise<FileOperationResult>
+  deleteNode(path: string): Promise<FileOperationResult>
+  moveNode(fromPath: string, toPath: string): Promise<FileOperationResult>
+  copyNode(fromPath: string, toPath: string): Promise<FileOperationResult>
+  renameNode(path: string, newName: string): Promise<FileOperationResult>
   getStats(): Promise<FileSystemStats>
+  searchFiles(options: FileSearchOptions): Promise<FileNode[]>
+  getFileContent(path: string): Promise<string | ArrayBuffer | null>
+  setFileContent(path: string, content: string | ArrayBuffer): Promise<FileOperationResult>
+  importFileTree(nodes: FileNode[]): Promise<FileOperationResult>
   dispose(): Promise<void>
 }
