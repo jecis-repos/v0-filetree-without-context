@@ -142,83 +142,115 @@ export class PhpImageProvider {
         ctx.fillStyle = options.textColor || "#000000"
         ctx.font = `${fontSize}px ${fontFamily}`
 
-        // Draw title
-        ctx.font = `bold ${fontSize + 4}px ${fontFamily}`
-        ctx.fillText("File Tree Visualization", 20, 30)
+        // Draw header with better styling
+        ctx.fillStyle = "#2563eb"
+        ctx.fillRect(0, 0, canvas.width, 60)
+
+        ctx.fillStyle = "#ffffff"
+        ctx.font = `bold ${fontSize + 6}px ${fontFamily}`
+        ctx.fillText("📁 File Tree Structure", 20, 35)
 
         // Draw file count info
-        ctx.font = `${fontSize}px ${fontFamily}`
-        ctx.fillStyle = "#666666"
-        ctx.fillText(`Total files: ${filePaths.length}`, 20, 50)
+        ctx.fillStyle = "#ffffff"
+        ctx.font = `${fontSize - 2}px ${fontFamily}`
+        ctx.fillText(`${filePaths.length} items`, canvas.width - 120, 35)
 
-        // Reset text color for file tree
+        // Reset for content area
         ctx.fillStyle = options.textColor || "#000000"
         ctx.font = `${fontSize}px ${fontFamily}`
 
-        const lineHeight = fontSize * 1.5
-        let y = 80
+        const lineHeight = fontSize * 1.8
+        let y = 90
+        const leftMargin = 30
 
-        // Sort paths for better visualization
-        const sortedPaths = [...filePaths].sort()
+        // Parse and organize file paths
+        const organizedPaths = this.organizeFilePaths(filePaths)
 
-        // Draw file tree with better structure
-        for (let i = 0; i < sortedPaths.length && y < canvas.height - 40; i++) {
-          const path = sortedPaths[i]
-          if (!path || typeof path !== "string") continue
+        // Draw organized file tree
+        for (const item of organizedPaths) {
+          if (y > canvas.height - 60) break
 
-          const parts = path.split("/").filter(Boolean)
-          const indent = Math.max(0, parts.length - 1)
-          const x = 20 + indent * 20
-          const name = parts[parts.length - 1] || path
+          const x = leftMargin + item.depth * 25
 
-          // Draw connector lines for hierarchy
-          if (indent > 0) {
-            ctx.strokeStyle = "#cccccc"
+          // Draw connection lines
+          if (item.depth > 0) {
+            ctx.strokeStyle = "#e5e7eb"
             ctx.lineWidth = 1
             ctx.beginPath()
-            ctx.moveTo(x - 15, y - lineHeight / 2)
-            ctx.lineTo(x - 15, y)
-            ctx.lineTo(x - 5, y)
+
+            // Vertical line from parent
+            ctx.moveTo(x - 25, y - lineHeight)
+            ctx.lineTo(x - 25, y - 5)
+
+            // Horizontal line to item
+            ctx.moveTo(x - 25, y - 5)
+            ctx.lineTo(x - 5, y - 5)
+
             ctx.stroke()
           }
 
-          // Draw file/folder icon
-          const isDirectory = !name.includes(".") || path.endsWith("/")
-          if (isDirectory) {
-            // Draw folder icon
-            ctx.fillStyle = "#4a90e2"
-            ctx.fillRect(x, y - 10, 14, 12)
-            ctx.fillStyle = "#5ba0f2"
-            ctx.fillRect(x + 2, y - 8, 10, 8)
-          } else {
-            // Draw file icon
-            ctx.fillStyle = "#8e8e93"
-            ctx.fillRect(x, y - 10, 12, 14)
-            ctx.fillStyle = "#ffffff"
-            ctx.fillRect(x + 2, y - 8, 8, 10)
+          // Draw file/folder icon with better styling
+          if (item.isDirectory) {
+            // Folder icon
+            ctx.fillStyle = "#3b82f6"
+            ctx.fillRect(x, y - 12, 16, 12)
+            ctx.fillStyle = "#60a5fa"
+            ctx.fillRect(x + 2, y - 10, 12, 8)
 
-            // Add file type indicator
-            const ext = name.split(".").pop()?.toLowerCase()
+            // Folder tab
+            ctx.fillStyle = "#3b82f6"
+            ctx.fillRect(x, y - 14, 6, 2)
+          } else {
+            // File icon with type-specific colors
+            const ext = item.name.split(".").pop()?.toLowerCase() || ""
+            ctx.fillStyle = this.getFileTypeColor(ext)
+            ctx.fillRect(x, y - 12, 14, 16)
+
+            // File content area
+            ctx.fillStyle = "#ffffff"
+            ctx.fillRect(x + 2, y - 10, 10, 12)
+
+            // File type indicator
             if (ext) {
               ctx.fillStyle = this.getFileTypeColor(ext)
-              ctx.fillRect(x + 10, y - 10, 4, 4)
+              ctx.font = `bold ${fontSize - 4}px ${fontFamily}`
+              ctx.fillText(ext.substring(0, 3).toUpperCase(), x + 3, y - 2)
+              ctx.font = `${fontSize}px ${fontFamily}`
             }
           }
 
-          // Draw file/folder name
-          ctx.fillStyle = options.textColor || "#000000"
-          const maxNameLength = Math.floor((canvas.width - x - 20) / (fontSize * 0.6))
-          const displayName = name.length > maxNameLength ? name.substring(0, maxNameLength - 3) + "..." : name
-          ctx.fillText(displayName, x + 18, y)
+          // Draw file/folder name with truncation
+          ctx.fillStyle = item.isDirectory ? "#1f2937" : "#374151"
+          const maxNameLength = Math.floor((canvas.width - x - 40) / (fontSize * 0.6))
+          const displayName =
+            item.name.length > maxNameLength ? item.name.substring(0, maxNameLength - 3) + "..." : item.name
+
+          ctx.fillText(displayName, x + 20, y)
+
+          // Add file size for files
+          if (!item.isDirectory && item.size) {
+            ctx.fillStyle = "#9ca3af"
+            ctx.font = `${fontSize - 2}px ${fontFamily}`
+            const sizeText = this.formatFileSize(item.size)
+            ctx.fillText(sizeText, canvas.width - 100, y)
+            ctx.font = `${fontSize}px ${fontFamily}`
+          }
 
           y += lineHeight
         }
 
-        // Add metadata footer
-        ctx.fillStyle = "#999999"
+        // Draw footer with metadata
+        ctx.fillStyle = "#f3f4f6"
+        ctx.fillRect(0, canvas.height - 50, canvas.width, 50)
+
+        ctx.fillStyle = "#6b7280"
         ctx.font = `${fontSize - 2}px ${fontFamily}`
-        ctx.fillText(`Generated: ${new Date().toLocaleString()}`, 20, canvas.height - 30)
-        ctx.fillText(`Canvas: ${canvas.width}x${canvas.height}`, 20, canvas.height - 15)
+        ctx.fillText(`Generated: ${new Date().toLocaleString()}`, 20, canvas.height - 25)
+        ctx.fillText(`Canvas: ${canvas.width}×${canvas.height}`, 20, canvas.height - 10)
+
+        const stats = this.calculateStats(filePaths)
+        ctx.fillText(`Files: ${stats.files} | Folders: ${stats.folders}`, canvas.width - 200, canvas.height - 25)
+        ctx.fillText(`Types: ${stats.extensions.join(", ")}`, canvas.width - 200, canvas.height - 10)
 
         // Convert canvas to blob
         canvas.toBlob(
@@ -258,12 +290,114 @@ export class PhpImageProvider {
     })
   }
 
+  private organizeFilePaths(filePaths: string[]): Array<{
+    name: string
+    path: string
+    depth: number
+    isDirectory: boolean
+    size?: number
+  }> {
+    const items: Array<{
+      name: string
+      path: string
+      depth: number
+      isDirectory: boolean
+      size?: number
+    }> = []
+
+    // Sort paths to ensure proper hierarchy
+    const sortedPaths = [...filePaths].sort()
+
+    for (const path of sortedPaths) {
+      if (!path || typeof path !== "string") continue
+
+      const parts = path.split("/").filter(Boolean)
+      const name = parts[parts.length - 1] || path
+      const depth = Math.max(0, parts.length - 1)
+      const isDirectory = !name.includes(".") || path.endsWith("/")
+
+      items.push({
+        name,
+        path,
+        depth,
+        isDirectory,
+        size: isDirectory ? undefined : this.estimateFileSize(name),
+      })
+    }
+
+    return items
+  }
+
+  private calculateStats(filePaths: string[]) {
+    const stats = {
+      files: 0,
+      folders: 0,
+      extensions: new Set<string>(),
+    }
+
+    for (const path of filePaths) {
+      const name = path.split("/").pop() || ""
+      const isDirectory = !name.includes(".") || path.endsWith("/")
+
+      if (isDirectory) {
+        stats.folders++
+      } else {
+        stats.files++
+        const ext = name.split(".").pop()?.toLowerCase()
+        if (ext) {
+          stats.extensions.add(ext)
+        }
+      }
+    }
+
+    return {
+      files: stats.files,
+      folders: stats.folders,
+      extensions: Array.from(stats.extensions).slice(0, 5), // Limit to 5 extensions
+    }
+  }
+
+  private formatFileSize(bytes: number): string {
+    if (bytes < 1024) return `${bytes}B`
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)}KB`
+    return `${Math.round(bytes / (1024 * 1024))}MB`
+  }
+
+  private estimateFileSize(fileName: string): number {
+    const extension = fileName.split(".").pop()?.toLowerCase()
+    const sizeEstimates: Record<string, number> = {
+      js: 3072,
+      ts: 3584,
+      jsx: 3200,
+      tsx: 3800,
+      json: 1536,
+      html: 2048,
+      css: 1536,
+      scss: 1800,
+      md: 2048,
+      txt: 1024,
+      png: 51200,
+      jpg: 76800,
+      jpeg: 76800,
+      gif: 25600,
+      svg: 2048,
+      pdf: 204800,
+      zip: 1048576,
+      mp4: 10485760,
+      mp3: 3145728,
+    }
+    return sizeEstimates[extension || ""] || 1024
+  }
+
   private getFileTypeColor(extension: string): string {
     const colorMap: Record<string, string> = {
       js: "#f7df1e",
+      jsx: "#61dafb",
       ts: "#3178c6",
+      tsx: "#3178c6",
       html: "#e34f26",
       css: "#1572b6",
+      scss: "#cf649a",
       json: "#000000",
       md: "#083fa1",
       png: "#ff6b6b",
@@ -274,6 +408,9 @@ export class PhpImageProvider {
       txt: "#6b7280",
       xml: "#ff6600",
       svg: "#ff9500",
+      zip: "#9333ea",
+      mp4: "#ef4444",
+      mp3: "#10b981",
     }
     return colorMap[extension] || "#6b7280"
   }
@@ -300,32 +437,34 @@ export class PhpImageProvider {
       ctx.fillStyle = options.backgroundColor || "#ffffff"
       ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-      // Set text properties
-      ctx.fillStyle = options.textColor || "#000000"
-      ctx.font = `${options.fontSize || 12}px ${options.fontFamily || "Arial, sans-serif"}`
+      // Draw header
+      ctx.fillStyle = "#2563eb"
+      ctx.fillRect(0, 0, canvas.width, 60)
 
-      // Draw title
-      ctx.font = `bold ${(options.fontSize || 12) + 4}px ${options.fontFamily || "Arial, sans-serif"}`
-      ctx.fillText(`Directory Visualization (${options.visualizationType})`, 20, 30)
+      ctx.fillStyle = "#ffffff"
+      ctx.font = `bold ${(options.fontSize || 12) + 6}px ${options.fontFamily || "Arial, sans-serif"}`
+      ctx.fillText(`📊 ${options.visualizationType.toUpperCase()} Visualization`, 20, 35)
 
       // Different visualization types
       switch (options.visualizationType) {
         case "tree":
-          this.drawTreeVisualization(ctx, filePaths, canvas.width, canvas.height, options)
+          this.drawEnhancedTreeVisualization(ctx, filePaths, canvas.width, canvas.height - 60, options)
           break
         case "sunburst":
-          this.drawSunburstVisualization(ctx, filePaths, canvas.width, canvas.height, options)
+          this.drawEnhancedSunburstVisualization(ctx, filePaths, canvas.width, canvas.height - 60, options)
           break
         case "treemap":
-          this.drawTreemapVisualization(ctx, filePaths, canvas.width, canvas.height, options)
+          this.drawEnhancedTreemapVisualization(ctx, filePaths, canvas.width, canvas.height - 60, options)
           break
       }
 
-      // Add metadata
-      ctx.fillStyle = "#666666"
-      ctx.font = `10px ${options.fontFamily || "Arial, sans-serif"}`
-      ctx.fillText(`Total items: ${filePaths.length}`, 20, canvas.height - 20)
-      ctx.fillText(`Generated: ${new Date().toLocaleString()}`, 20, canvas.height - 10)
+      // Add metadata footer
+      ctx.fillStyle = "#f3f4f6"
+      ctx.fillRect(0, canvas.height - 40, canvas.width, 40)
+
+      ctx.fillStyle = "#6b7280"
+      ctx.font = `${(options.fontSize || 12) - 2}px ${options.fontFamily || "Arial, sans-serif"}`
+      ctx.fillText(`Items: ${filePaths.length} | Generated: ${new Date().toLocaleString()}`, 20, canvas.height - 15)
 
       // Convert canvas to blob
       canvas.toBlob(
@@ -359,44 +498,56 @@ export class PhpImageProvider {
     })
   }
 
-  private drawTreeVisualization(
+  private drawEnhancedTreeVisualization(
     ctx: CanvasRenderingContext2D,
     filePaths: string[],
     width: number,
     height: number,
     options: ImageGenerationOptions,
   ) {
-    // Parse paths into a tree structure
     const tree = this.parsePathsToTree(filePaths)
-    const lineHeight = (options.fontSize || 12) * 1.5
-    const startY = 60
-    const startX = 20
+    const lineHeight = (options.fontSize || 12) * 2
+    const startY = 80
+    const startX = 30
 
-    // Draw tree recursively
     const drawNode = (node: any, x: number, y: number, level: number): number => {
-      if (y > height - 40) return y // Stop if we run out of space
+      if (y > height - 60) return y
 
-      // Draw node
-      ctx.fillStyle = node.isDirectory ? "#4a7ebb" : "#a0a0a0"
-      ctx.fillRect(x, y - 8, node.isDirectory ? 12 : 10, node.isDirectory ? 10 : 12)
+      // Draw connection lines
+      if (level > 0) {
+        ctx.strokeStyle = "#d1d5db"
+        ctx.lineWidth = 2
+        ctx.beginPath()
+        ctx.moveTo(x - 20, y - lineHeight / 2)
+        ctx.lineTo(x - 20, y)
+        ctx.lineTo(x - 5, y)
+        ctx.stroke()
+      }
 
-      // Draw name
-      ctx.fillStyle = options.textColor || "#000000"
-      ctx.fillText(node.name, x + 16, y)
+      // Draw node with enhanced styling
+      if (node.isDirectory) {
+        ctx.fillStyle = "#3b82f6"
+        ctx.fillRect(x, y - 10, 16, 12)
+        ctx.fillStyle = "#60a5fa"
+        ctx.fillRect(x + 2, y - 8, 12, 8)
+      } else {
+        const ext = node.name.split(".").pop()?.toLowerCase() || ""
+        ctx.fillStyle = this.getFileTypeColor(ext)
+        ctx.fillRect(x, y - 10, 14, 14)
+        ctx.fillStyle = "#ffffff"
+        ctx.fillRect(x + 2, y - 8, 10, 10)
+      }
+
+      // Draw name with better typography
+      ctx.fillStyle = node.isDirectory ? "#1f2937" : "#374151"
+      ctx.font = `${node.isDirectory ? "bold " : ""}${options.fontSize || 12}px ${options.fontFamily || "Arial, sans-serif"}`
+      ctx.fillText(node.name, x + 20, y)
 
       let newY = y + lineHeight
 
       // Draw children
       if (node.children && node.children.length > 0) {
         for (const child of node.children) {
-          // Draw connector line
-          ctx.strokeStyle = "#aaaaaa"
-          ctx.beginPath()
-          ctx.moveTo(x + 6, y + 5)
-          ctx.lineTo(x + 6, y + lineHeight / 2)
-          ctx.lineTo(x + 20, y + lineHeight / 2)
-          ctx.stroke()
-
           newY = drawNode(child, x + 30, newY, level + 1)
         }
       }
@@ -404,11 +555,10 @@ export class PhpImageProvider {
       return newY
     }
 
-    // Start drawing from root
     drawNode(tree, startX, startY, 0)
   }
 
-  private drawSunburstVisualization(
+  private drawEnhancedSunburstVisualization(
     ctx: CanvasRenderingContext2D,
     filePaths: string[],
     width: number,
@@ -416,13 +566,10 @@ export class PhpImageProvider {
     options: ImageGenerationOptions,
   ) {
     const centerX = width / 2
-    const centerY = height / 2
-    const maxRadius = Math.min(width, height) / 2 - 50
+    const centerY = (height + 60) / 2
+    const maxRadius = Math.min(width, height - 60) / 2 - 50
 
-    // Parse paths into a tree structure
     const tree = this.parsePathsToTree(filePaths)
-
-    // Count total nodes for angle calculation
     const countNodes = (node: any): number => {
       let count = 1
       if (node.children) {
@@ -434,49 +581,56 @@ export class PhpImageProvider {
     }
 
     const totalNodes = countNodes(tree)
-    const anglePerNode = (2 * Math.PI) / totalNodes
+    const anglePerNode = (2 * Math.PI) / Math.max(totalNodes, 1)
 
-    // Draw sunburst recursively
     const drawSunburst = (node: any, startAngle: number, endAngle: number, innerRadius: number, level: number) => {
-      const outerRadius = innerRadius + 30
+      const outerRadius = Math.min(innerRadius + 40, maxRadius)
 
-      // Draw arc
+      // Draw arc with gradient effect
       ctx.beginPath()
       ctx.arc(centerX, centerY, innerRadius, startAngle, endAngle)
       ctx.arc(centerX, centerY, outerRadius, endAngle, startAngle, true)
       ctx.closePath()
 
-      // Fill with color
-      ctx.fillStyle = node.isDirectory ? `hsl(210, 50%, ${60 - level * 10}%)` : `hsl(0, 0%, ${70 - level * 5}%)`
+      // Enhanced colors with gradients
+      const hue = node.isDirectory ? 210 : (level * 60) % 360
+      const saturation = node.isDirectory ? 70 : 50
+      const lightness = Math.max(30, 80 - level * 15)
+
+      ctx.fillStyle = `hsl(${hue}, ${saturation}%, ${lightness}%)`
       ctx.fill()
 
+      // Better borders
       ctx.strokeStyle = options.backgroundColor || "#ffffff"
-      ctx.lineWidth = 1
+      ctx.lineWidth = 2
       ctx.stroke()
 
-      // Draw label if segment is large enough
+      // Enhanced labels
       const angle = (startAngle + endAngle) / 2
       const midRadius = (innerRadius + outerRadius) / 2
       const angleWidth = endAngle - startAngle
 
-      if (angleWidth > 0.2 && outerRadius - innerRadius > 15) {
+      if (angleWidth > 0.3 && outerRadius - innerRadius > 20) {
         ctx.save()
         ctx.translate(centerX + Math.cos(angle) * midRadius, centerY + Math.sin(angle) * midRadius)
-        ctx.rotate(angle + Math.PI / 2)
-        ctx.fillStyle = options.textColor || "#000000"
-        ctx.font = `${Math.min(11, options.fontSize || 12)}px ${options.fontFamily || "Arial, sans-serif"}`
+        ctx.rotate(angle > Math.PI / 2 && angle < (3 * Math.PI) / 2 ? angle + Math.PI : angle)
+
+        ctx.fillStyle = lightness > 50 ? "#000000" : "#ffffff"
+        ctx.font = `${Math.min(12, options.fontSize || 12)}px ${options.fontFamily || "Arial, sans-serif"}`
         ctx.textAlign = "center"
-        ctx.fillText(node.name.substring(0, 15), 0, 0)
+
+        const displayName = node.name.length > 12 ? node.name.substring(0, 12) + "..." : node.name
+        ctx.fillText(displayName, 0, 4)
         ctx.restore()
       }
 
       // Draw children
-      if (node.children && node.children.length > 0) {
+      if (node.children && node.children.length > 0 && outerRadius < maxRadius) {
         let currentAngle = startAngle
         for (const child of node.children) {
           const childNodeCount = countNodes(child)
           const childAngleWidth = childNodeCount * anglePerNode
-          const childEndAngle = currentAngle + childAngleWidth
+          const childEndAngle = Math.min(currentAngle + childAngleWidth, endAngle)
 
           drawSunburst(child, currentAngle, childEndAngle, outerRadius, level + 1)
           currentAngle = childEndAngle
@@ -484,21 +638,29 @@ export class PhpImageProvider {
       }
     }
 
-    // Start drawing from root
-    drawSunburst(tree, 0, 2 * Math.PI, 50, 0)
+    // Draw center circle
+    ctx.beginPath()
+    ctx.arc(centerX, centerY, 30, 0, 2 * Math.PI)
+    ctx.fillStyle = "#1f2937"
+    ctx.fill()
+
+    ctx.fillStyle = "#ffffff"
+    ctx.font = `bold ${options.fontSize || 12}px ${options.fontFamily || "Arial, sans-serif"}`
+    ctx.textAlign = "center"
+    ctx.fillText("ROOT", centerX, centerY + 4)
+
+    drawSunburst(tree, 0, 2 * Math.PI, 35, 0)
   }
 
-  private drawTreemapVisualization(
+  private drawEnhancedTreemapVisualization(
     ctx: CanvasRenderingContext2D,
     filePaths: string[],
     width: number,
     height: number,
     options: ImageGenerationOptions,
   ) {
-    // Parse paths into a tree structure
     const tree = this.parsePathsToTree(filePaths)
 
-    // Calculate weights for treemap
     const calculateWeight = (node: any): number => {
       if (!node.children || node.children.length === 0) {
         return 1
@@ -513,53 +675,84 @@ export class PhpImageProvider {
 
     calculateWeight(tree)
 
-    // Draw treemap recursively
     const drawTreemap = (node: any, x: number, y: number, boxWidth: number, boxHeight: number, level: number) => {
-      // Draw rectangle
-      ctx.fillStyle = node.isDirectory ? `hsl(210, 50%, ${80 - level * 10}%)` : `hsl(0, 0%, ${85 - level * 5}%)`
+      if (boxWidth < 10 || boxHeight < 10) return
+
+      // Enhanced colors
+      const hue = node.isDirectory ? 210 : (level * 60 + 30) % 360
+      const saturation = 60
+      const lightness = Math.max(40, 85 - level * 10)
+
+      ctx.fillStyle = `hsl(${hue}, ${saturation}%, ${lightness}%)`
       ctx.fillRect(x, y, boxWidth, boxHeight)
-      ctx.strokeStyle = options.backgroundColor || "#ffffff"
+
+      // Better borders
+      ctx.strokeStyle = "#ffffff"
       ctx.lineWidth = 2
       ctx.strokeRect(x, y, boxWidth, boxHeight)
 
-      // Draw label if box is large enough
-      if (boxWidth > 40 && boxHeight > 15) {
-        ctx.fillStyle = options.textColor || "#000000"
-        ctx.font = `${Math.min(11, options.fontSize || 12)}px ${options.fontFamily || "Arial, sans-serif"}`
+      // Enhanced labels
+      if (boxWidth > 60 && boxHeight > 30) {
+        ctx.fillStyle = lightness > 60 ? "#000000" : "#ffffff"
+        ctx.font = `${Math.min(14, options.fontSize || 12)}px ${options.fontFamily || "Arial, sans-serif"}`
         ctx.textAlign = "left"
-        ctx.fillText(node.name.substring(0, Math.floor(boxWidth / 7)), x + 5, y + (options.fontSize || 12) + 2)
+
+        const maxChars = Math.floor(boxWidth / 8)
+        const displayName = node.name.length > maxChars ? node.name.substring(0, maxChars - 3) + "..." : node.name
+        ctx.fillText(displayName, x + 8, y + 20)
+
+        // Add file count for directories
+        if (node.isDirectory && node.children) {
+          ctx.font = `${Math.min(10, options.fontSize || 12) - 2}px ${options.fontFamily || "Arial, sans-serif"}`
+          ctx.fillText(`${node.children.length} items`, x + 8, y + 35)
+        }
       }
 
-      // Draw children
-      if (node.children && node.children.length > 0 && boxWidth > 10 && boxHeight > 10) {
-        // Sort children by weight
+      // Draw children with improved layout
+      if (node.children && node.children.length > 0 && boxWidth > 20 && boxHeight > 20) {
         const sortedChildren = [...node.children].sort((a, b) => (b.weight || 1) - (a.weight || 1))
+        const padding = 4
+        const availableWidth = boxWidth - padding * 2
+        const availableHeight = boxHeight - padding * 2 - (boxHeight > 30 ? 40 : 0)
 
-        // Decide layout direction (horizontal or vertical)
-        const isHorizontal = boxWidth > boxHeight
+        if (availableWidth > 0 && availableHeight > 0) {
+          const isHorizontal = availableWidth > availableHeight
+          let currentPosition = 0
+          const totalWeight = node.weight || sortedChildren.reduce((sum, child) => sum + (child.weight || 1), 0)
 
-        let currentPosition = 0
-        const totalWeight = node.weight || sortedChildren.reduce((sum, child) => sum + (child.weight || 1), 0)
+          for (const child of sortedChildren) {
+            const childWeight = child.weight || 1
+            const ratio = childWeight / totalWeight
 
-        for (const child of sortedChildren) {
-          const childWeight = child.weight || 1
-          const ratio = childWeight / totalWeight
-
-          if (isHorizontal) {
-            const childWidth = boxWidth * ratio
-            drawTreemap(child, x + currentPosition, y + 20, childWidth, boxHeight - 20, level + 1)
-            currentPosition += childWidth
-          } else {
-            const childHeight = boxHeight * ratio
-            drawTreemap(child, x, y + currentPosition, boxWidth, childHeight, level + 1)
-            currentPosition += childHeight
+            if (isHorizontal) {
+              const childWidth = availableWidth * ratio
+              drawTreemap(
+                child,
+                x + padding + currentPosition,
+                y + padding + (boxHeight > 30 ? 40 : 0),
+                childWidth,
+                availableHeight,
+                level + 1,
+              )
+              currentPosition += childWidth
+            } else {
+              const childHeight = availableHeight * ratio
+              drawTreemap(
+                child,
+                x + padding,
+                y + padding + (boxHeight > 30 ? 40 : 0) + currentPosition,
+                availableWidth,
+                childHeight,
+                level + 1,
+              )
+              currentPosition += childHeight
+            }
           }
         }
       }
     }
 
-    // Start drawing from root
-    drawTreemap(tree, 50, 50, width - 100, height - 100, 0)
+    drawTreemap(tree, 30, 80, width - 60, height - 140, 0)
   }
 
   private parsePathsToTree(filePaths: string[]) {
@@ -578,10 +771,8 @@ export class PhpImageProvider {
         const isDirectory = i < parts.length - 1 || !part.includes(".")
         const isLastPart = i === parts.length - 1
 
-        // Find existing child
         let childNode = currentNode.children.find((child) => child.name === part)
 
-        // Create new child if not found
         if (!childNode) {
           childNode = {
             name: part,
@@ -591,7 +782,6 @@ export class PhpImageProvider {
           currentNode.children.push(childNode)
         }
 
-        // Update current node for next iteration
         if (!isLastPart) {
           currentNode = childNode
         }

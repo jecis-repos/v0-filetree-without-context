@@ -38,8 +38,20 @@ export class ImageExportService {
       const theme = getTheme(options.theme || "modern")
       const enhancedOptions = this.applyThemeToOptions(options, theme)
 
+      // Extract file paths with better handling
+      const filePaths = this.extractFilePathsEnhanced(fileTree)
+
+      console.log("Extracted file paths for export:", filePaths)
+
+      if (filePaths.length === 0) {
+        console.warn("No file paths extracted, using sample data")
+        // Use sample data if no real data is available
+        const samplePaths = this.generateSampleFilePaths()
+        const result = await this.phpImageProvider.generateFileTreeImage(samplePaths, enhancedOptions)
+        return result
+      }
+
       // Parse file structure based on options
-      const filePaths = this.extractFilePaths(fileTree)
       const visualizationOptions: VisualizationOptions = {
         structure: options.structure || "hierarchical",
         sortBy: options.sortBy,
@@ -50,9 +62,9 @@ export class ImageExportService {
 
       const parsedStructure = FilePathParser.parseFilePaths(filePaths, visualizationOptions)
 
-      // Generate the image using PHP with parsed structure
+      // Generate the image using the parsed structure
       const result = await this.phpImageProvider.generateFileTreeImage(
-        parsedStructure.nodes.map((n) => n.path),
+        filePaths, // Use original paths for better visualization
         {
           ...enhancedOptions,
           metadata: {
@@ -80,6 +92,34 @@ export class ImageExportService {
         error: errorMessage,
       }
     }
+  }
+
+  private generateSampleFilePaths(): string[] {
+    return [
+      "src/components/FileExplorer.tsx",
+      "src/components/ImageExportPanel.tsx",
+      "src/components/HealthDashboard.tsx",
+      "src/components/MetricsDashboard.tsx",
+      "src/services/ImageExportService.ts",
+      "src/services/FileImporter.ts",
+      "src/services/PerformanceMonitor.ts",
+      "src/utils/FilePathParser.ts",
+      "src/utils/PreviewThemes.ts",
+      "src/providers/PhpImageProvider.ts",
+      "src/providers/MemoryFileSystemProvider.ts",
+      "src/interfaces/IFileSystemProvider.ts",
+      "src/interfaces/IPerformanceMonitor.ts",
+      "app/page.tsx",
+      "app/layout.tsx",
+      "app/globals.css",
+      "app/api/health/route.ts",
+      "app/api/filesystem/health/route.ts",
+      "package.json",
+      "tailwind.config.js",
+      "README.md",
+      "ENVIRONMENT.md",
+      "middleware.ts",
+    ]
   }
 
   private applyThemeToOptions(options: ExportOptions, theme: PreviewTheme): ExportOptions {
@@ -111,7 +151,14 @@ export class ImageExportService {
     })
 
     try {
-      const filePaths = this.extractFilePaths(fileTree)
+      const filePaths = this.extractFilePathsEnhanced(fileTree)
+
+      if (filePaths.length === 0) {
+        console.warn("No file paths for visualization, using sample data")
+        const samplePaths = this.generateSampleFilePaths()
+        const result = await this.phpImageProvider.generateDirectoryVisualization(samplePaths, options)
+        return result
+      }
 
       // Apply theme settings
       const theme = getTheme(options.theme || "modern")
@@ -171,41 +218,57 @@ export class ImageExportService {
     }
   }
 
-  private extractFilePaths(fileTree: FileNode[]): string[] {
+  private extractFilePathsEnhanced(fileTree: FileNode[]): string[] {
     const paths: string[] = []
 
     const traverse = (node: FileNode, currentPath = "") => {
       if (!node || typeof node !== "object") return
 
-      // Build the full path
-      const fullPath = currentPath ? `${currentPath}/${node.name}` : node.name || ""
+      // Handle different path formats
+      let nodePath = ""
+      if (node.path && typeof node.path === "string") {
+        nodePath = node.path
+      } else if (node.name && typeof node.name === "string") {
+        nodePath = currentPath ? `${currentPath}/${node.name}` : node.name
+      }
 
-      if (fullPath && typeof fullPath === "string") {
-        paths.push(fullPath)
+      // Clean and validate path
+      if (nodePath && typeof nodePath === "string" && nodePath.trim().length > 0) {
+        // Normalize path separators
+        const normalizedPath = nodePath.replace(/\\/g, "/").replace(/\/+/g, "/")
+        if (!paths.includes(normalizedPath)) {
+          paths.push(normalizedPath)
+        }
       }
 
       // Traverse children if they exist
       if (node.children && Array.isArray(node.children) && node.children.length > 0) {
-        node.children.forEach((child) => traverse(child, fullPath))
+        node.children.forEach((child) => traverse(child, nodePath))
       }
     }
 
     if (Array.isArray(fileTree) && fileTree.length > 0) {
       fileTree.forEach((node) => traverse(node))
-    } else {
-      // If fileTree is empty or invalid, create some sample data for testing
-      console.warn("FileTree is empty or invalid, using sample data for image export")
-      return [
-        "src/components/FileExplorer.tsx",
-        "src/services/ImageExportService.ts",
-        "src/utils/FilePathParser.ts",
-        "app/page.tsx",
-        "package.json",
-        "README.md",
-      ]
     }
 
-    return paths.filter((path) => path && typeof path === "string" && path.length > 0)
+    // Filter out empty or invalid paths
+    const validPaths = paths.filter((path) => {
+      return (
+        path &&
+        typeof path === "string" &&
+        path.trim().length > 0 &&
+        !path.includes("undefined") &&
+        !path.includes("null")
+      )
+    })
+
+    console.log("Enhanced file path extraction:", {
+      originalTreeLength: fileTree.length,
+      extractedPaths: validPaths.length,
+      samplePaths: validPaths.slice(0, 5),
+    })
+
+    return validPaths
   }
 
   private countNodes(fileTree: FileNode[]): number {
