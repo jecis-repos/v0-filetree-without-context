@@ -23,7 +23,8 @@ interface SystemHealth {
   details: HealthStatus[]
 }
 
-export default function HealthDashboard() {
+// Add named export to fix deployment error
+export function HealthDashboard() {
   const [healthService] = useState(() => new HealthMonitoringService())
   const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -206,4 +207,9 @@ export default function HealthDashboard() {
       )}
     </div>
   )
+}
+
+// Keep default export for backward compatibility
+export default function HealthDashboardComponent() {
+  return <HealthDashboard />
 }
