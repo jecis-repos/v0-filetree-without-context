@@ -94,17 +94,34 @@ export class DIContainer {
   }
 
   private getImplementationClass(implementation: string): any {
-    // In a real implementation, this would use dynamic imports
-    // For demo purposes, we'll use a simple mapping
-    const implementations: Record<string, any> = {
-      WasmFileSystemProvider: WasmFileSystemProvider,
-      MemoryFileSystemProvider: MemoryFileSystemProvider,
-      CacheService: CacheService,
-      FileSystemCalculator: FileSystemCalculator,
-      PerformanceMonitor: PerformanceMonitor,
+    // Import implementations dynamically
+    const implementations: Record<string, any> = {}
+
+    // Register implementations
+    try {
+      const { WasmFileSystemProvider } = require("../providers/WasmFileSystemProvider")
+      const { MemoryFileSystemProvider } = require("../providers/MemoryFileSystemProvider")
+      const { CacheService } = require("../services/CacheService")
+      const { FileSystemCalculator } = require("../services/FileSystemCalculator")
+      const { PerformanceMonitor } = require("../services/PerformanceMonitor")
+      const { LoggingService } = require("../services/LoggingService")
+
+      implementations.WasmFileSystemProvider = WasmFileSystemProvider
+      implementations.MemoryFileSystemProvider = MemoryFileSystemProvider
+      implementations.CacheService = CacheService
+      implementations.FileSystemCalculator = FileSystemCalculator
+      implementations.PerformanceMonitor = PerformanceMonitor
+      implementations.LoggingService = LoggingService
+    } catch (error) {
+      console.warn("Failed to load some implementations:", error)
     }
 
-    return implementations[implementation]
+    const ImplementationClass = implementations[implementation]
+    if (!ImplementationClass) {
+      throw new Error(`Implementation not found: ${implementation}`)
+    }
+
+    return ImplementationClass
   }
 
   getRegisteredServices(): string[] {
@@ -123,9 +140,5 @@ export class DIContainer {
   }
 }
 
-// Import implementations (these would be actual imports in real code)
-declare const WasmFileSystemProvider: any
-declare const MemoryFileSystemProvider: any
-declare const CacheService: any
-declare const FileSystemCalculator: any
-declare const PerformanceMonitor: any
+// Export default as well for compatibility
+export default DIContainer

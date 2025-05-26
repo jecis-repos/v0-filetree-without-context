@@ -1,6 +1,15 @@
 {
   "services": [
     {
+      "name": "ILoggingService",
+      "implementation": "LoggingService",
+      "lifetime": "singleton",
+      "dependencies": [],
+      "configuration": {
+        "maxLogs": 1000
+      }
+    },
+    {
       "name": "ICacheService",
       "implementation": "CacheService",
       "lifetime": "singleton",

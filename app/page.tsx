@@ -1,183 +1,108 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { FileTreeExplorer } from "@/src/components/FileTreeExplorer"
-import { FilePreview } from "@/src/components/FilePreview"
-import { BenchmarkPanel } from "@/src/components/BenchmarkPanel"
-import { ImageExportPanel } from "@/src/components/ImageExportPanel"
-import { MetricsDashboard } from "@/src/components/MetricsDashboard"
-import { ErrorDashboard } from "@/src/components/ErrorDashboard"
-import { ErrorBoundary } from "@/src/components/ErrorBoundary"
-import { DIContainer } from "@/src/container/DIContainer"
-import { WasmFileSystemProvider } from "@/src/providers/WasmFileSystemProvider"
-import { MemoryFileSystemProvider } from "@/src/providers/MemoryFileSystemProvider"
-import { CacheService } from "@/src/services/CacheService"
-import { FileSystemCalculator } from "@/src/services/FileSystemCalculator"
-import { PerformanceMonitor } from "@/src/services/PerformanceMonitor"
-import { ImageExportService } from "@/src/services/ImageExportService"
-import { LoggingService } from "@/src/services/LoggingService"
-import { errorTracker } from "@/src/services/ErrorTrackingService"
-import type { FileNode } from "@/src/interfaces/IFileSystemProvider"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { safeString, isNullOrUndefined } from "@/src/utils/type-guards"
+import { useEffect, useState } from "react"
+import { FileTreeExplorer } from "../src/components/FileTreeExplorer"
+import { ThemeProvider } from "../src/styles/ThemeProvider"
+import { ErrorBoundary } from "../src/components/ErrorBoundary"
+import { DIContainer } from "../src/container/DIContainer"
+import { LoggingService } from "../src/services/LoggingService"
+import { MemoryFileSystemProvider } from "../src/providers/MemoryFileSystemProvider"
+import { PerformanceMonitor } from "../src/services/PerformanceMonitor"
+import { CacheService } from "../src/services/CacheService"
+import { FileSystemCalculator } from "../src/services/FileSystemCalculator"
+import diConfig from "../src/config/di-config.json"
 
 export default function Home() {
-  const [selectedFile, setSelectedFile] = useState<FileNode | null>(null)
   const [container, setContainer] = useState<DIContainer | null>(null)
-  const [isInitialized, setIsInitialized] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     const initializeContainer = async () => {
       try {
-        const diContainer = new DIContainer()
+        setIsLoading(true)
+        const newContainer = new DIContainer()
 
-        // Register services with error tracking
-        try {
-          diContainer.registerInstance("LoggingService", new LoggingService())
-          diContainer.registerInstance("CacheService", new CacheService())
-          diContainer.registerInstance("PerformanceMonitor", new PerformanceMonitor())
-          diContainer.registerInstance("FileSystemCalculator", new FileSystemCalculator())
-          diContainer.registerInstance("ImageExportService", new ImageExportService())
+        // Register concrete implementations first
+        const loggingService = new LoggingService(1000)
+        const performanceMonitor = new PerformanceMonitor()
+        const cacheService = new CacheService()
+        const fileSystemCalculator = new FileSystemCalculator(cacheService)
+        const memoryProvider = new MemoryFileSystemProvider(performanceMonitor)
 
-          // Register file system providers
-          diContainer.registerInstance("WasmFileSystemProvider", new WasmFileSystemProvider())
-          diContainer.registerInstance("MemoryFileSystemProvider", new MemoryFileSystemProvider())
+        // Register services in container
+        newContainer.registerInstance("ILoggingService", loggingService)
+        newContainer.registerInstance("IPerformanceMonitor", performanceMonitor)
+        newContainer.registerInstance("ICacheService", cacheService)
+        newContainer.registerInstance("IFileSystemCalculator", fileSystemCalculator)
+        newContainer.registerInstance("IFileSystemProvider", memoryProvider)
 
-          // Set default provider
-          diContainer.registerInstance("IFileSystemProvider", diContainer.resolve("MemoryFileSystemProvider"))
+        // Load configuration for any additional services
+        newContainer.loadConfiguration(diConfig)
 
-          setContainer(diContainer)
-          setIsInitialized(true)
+        // Log successful initialization
+        loggingService.info("System", "DI Container initialized successfully")
 
-          errorTracker.captureError("Application initialized successfully", {
-            type: "system",
-            severity: "low",
-            component: "App",
-            action: "initialization",
-          })
-        } catch (serviceError) {
-          errorTracker.captureError(serviceError, {
-            type: "system",
-            severity: "critical",
-            component: "App",
-            action: "service_registration",
-            shouldDelegate: true,
-            delegationReason: "Critical failure during service registration",
-          })
-          throw serviceError
-        }
-      } catch (error) {
-        errorTracker.captureError(error, {
-          type: "system",
-          severity: "critical",
-          component: "App",
-          action: "container_initialization",
-          shouldDelegate: true,
-          delegationReason: "Application failed to initialize",
-        })
-        console.error("Failed to initialize DI container:", error)
+        setContainer(newContainer)
+        setError(null)
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred"
+        console.error("Failed to initialize DI container:", err)
+        setError(errorMessage)
+      } finally {
+        setIsLoading(false)
       }
     }
 
     initializeContainer()
   }, [])
 
-  const handleFileSelect = (file: FileNode | null) => {
-    try {
-      setSelectedFile(file)
-
-      if (file) {
-        errorTracker.captureError(`File selected: ${safeString(file.name)}`, {
-          type: "user",
-          severity: "low",
-          component: "App",
-          action: "file_selection",
-          metadata: {
-            fileName: safeString(file.name),
-            fileType: safeString(file.type),
-            filePath: safeString(file.path),
-          },
-        })
-      }
-    } catch (error) {
-      errorTracker.captureError(error, {
-        type: "runtime",
-        severity: "medium",
-        component: "App",
-        action: "file_selection",
-      })
-    }
-  }
-
-  if (!isInitialized || isNullOrUndefined(container)) {
+  if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Initializing application...</p>
         </div>
       </div>
     )
   }
 
-  return (
-    <ErrorBoundary component="App">
-      <div className="min-h-screen bg-gray-50">
-        <div className="container mx-auto p-4">
-          <div className="mb-6">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">File Tree Explorer</h1>
-            <p className="text-gray-600">
-              Enterprise-level file system explorer with advanced visualization and error tracking
-            </p>
-          </div>
-
-          <Tabs defaultValue="explorer" className="space-y-4">
-            <TabsList className="grid w-full grid-cols-5">
-              <TabsTrigger value="explorer">Explorer</TabsTrigger>
-              <TabsTrigger value="benchmark">Benchmark</TabsTrigger>
-              <TabsTrigger value="export">Export</TabsTrigger>
-              <TabsTrigger value="metrics">Metrics</TabsTrigger>
-              <TabsTrigger value="errors">Errors</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="explorer" className="space-y-4">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[calc(100vh-200px)]">
-                <ErrorBoundary component="FileTreeExplorer">
-                  <FileTreeExplorer container={container} onFileSelect={handleFileSelect} selectedFile={selectedFile} />
-                </ErrorBoundary>
-
-                <ErrorBoundary component="FilePreview">
-                  <FilePreview file={selectedFile} container={container} />
-                </ErrorBoundary>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="benchmark">
-              <ErrorBoundary component="BenchmarkPanel">
-                <BenchmarkPanel container={container} />
-              </ErrorBoundary>
-            </TabsContent>
-
-            <TabsContent value="export">
-              <ErrorBoundary component="ImageExportPanel">
-                <ImageExportPanel container={container} />
-              </ErrorBoundary>
-            </TabsContent>
-
-            <TabsContent value="metrics">
-              <ErrorBoundary component="MetricsDashboard">
-                <MetricsDashboard container={container} />
-              </ErrorBoundary>
-            </TabsContent>
-
-            <TabsContent value="errors">
-              <ErrorBoundary component="ErrorDashboard">
-                <ErrorDashboard />
-              </ErrorBoundary>
-            </TabsContent>
-          </Tabs>
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center max-w-md p-6 bg-red-50 border border-red-200 rounded-lg">
+          <div className="text-red-600 text-4xl mb-4">⚠️</div>
+          <h1 className="text-xl font-bold text-red-800 mb-2">Initialization Failed</h1>
+          <p className="text-red-600 mb-4">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+          >
+            Retry
+          </button>
         </div>
       </div>
+    )
+  }
+
+  if (!container) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <p className="text-gray-600">Container not available</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <ErrorBoundary>
+      <ThemeProvider>
+        <main className="min-h-screen bg-background">
+          <FileTreeExplorer container={container} />
+        </main>
+      </ThemeProvider>
     </ErrorBoundary>
   )
 }
