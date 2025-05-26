@@ -66,23 +66,27 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (!mounted) return
 
     const root = document.documentElement
+    const html = document.querySelector("html")
     const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches
 
     // Determine if dark mode should be applied
     const shouldApplyDark = mode === "dark" || (mode === "system" && systemDark)
     setIsDark(shouldApplyDark)
 
-    // Remove all theme classes
+    // Remove all theme classes from both html and root
     root.classList.remove("dark", "android-theme")
+    html?.classList.remove("dark", "android-theme")
 
-    // Apply dark mode
+    // Apply dark mode to both html and root
     if (shouldApplyDark) {
       root.classList.add("dark")
+      html?.classList.add("dark")
     }
 
     // Apply theme variant
     if (variant === "android") {
       root.classList.add("android-theme")
+      html?.classList.add("android-theme")
     }
   }, [mode, variant, mounted])
 
