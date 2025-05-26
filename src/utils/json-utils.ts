@@ -3,7 +3,7 @@
  * Safe JSON parsing, stringifying, and comparison utilities
  */
 
-import { isObject, isArray, isString } from "./type-guards"
+import { safeToString as safeConvertToString } from "./safe-conversions"
 
 export interface JsonParseResult {
   success: boolean
@@ -27,21 +27,16 @@ export interface JsonCompareResult {
  */
 export function safeJsonParse(jsonString: string): JsonParseResult {
   try {
-    if (!isString(jsonString)) {
-      return {
-        success: false,
-        error: "Input is not a string",
-      }
-    }
+    const safeString = safeConvertToString(jsonString)
 
-    if (jsonString.trim() === "") {
+    if (safeString.trim() === "") {
       return {
         success: false,
         error: "Empty string cannot be parsed as JSON",
       }
     }
 
-    const data = JSON.parse(jsonString)
+    const data = JSON.parse(safeString)
     return {
       success: true,
       data,
@@ -49,7 +44,7 @@ export function safeJsonParse(jsonString: string): JsonParseResult {
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: error instanceof Error ? error.message : safeConvertToString(error),
     }
   }
 }
@@ -77,14 +72,14 @@ export function safeStringify(
       }
 
       // Handle circular references
-      if (isObject(value) && value !== null) {
+      if (value !== null && typeof value === "object") {
         if (seen.has(value)) {
           return "[Circular Reference]"
         }
         seen.add(value)
       }
 
-      // Handle special values
+      // Handle special values that cause object-to-primitive errors
       if (value === undefined) {
         return "[Undefined]"
       }
@@ -94,33 +89,47 @@ export function safeStringify(
       }
 
       if (typeof value === "symbol") {
-        return `[Symbol: ${String(value)}]`
+        return `[Symbol: ${safeConvertToString(value)}]`
       }
 
       if (typeof value === "bigint") {
-        return `[BigInt: ${String(value)}]`
+        return `[BigInt: ${safeConvertToString(value)}]`
       }
 
-      // Handle dates
+      // Handle dates safely
       if (value instanceof Date) {
-        return value.toISOString()
+        const time = value.getTime()
+        return isNaN(time) ? "[Invalid Date]" : value.toISOString()
       }
 
       // Handle errors
       if (value instanceof Error) {
         return {
-          name: value.name,
-          message: value.message,
-          stack: value.stack,
+          name: safeConvertToString(value.name),
+          message: safeConvertToString(value.message),
+          stack: safeConvertToString(value.stack),
+        }
+      }
+
+      // Handle RegExp
+      if (value instanceof RegExp) {
+        return {
+          source: safeConvertToString(value.source),
+          flags: safeConvertToString(value.flags),
         }
       }
 
       // Apply custom replacer if provided
       if (replacer) {
         depth++
-        const result = replacer(key, value)
-        depth--
-        return result
+        try {
+          const result = replacer(key, value)
+          depth--
+          return result
+        } catch (err) {
+          depth--
+          return `[Replacer Error: ${safeConvertToString(err)}]`
+        }
       }
 
       return value
@@ -129,7 +138,7 @@ export function safeStringify(
     return JSON.stringify(data, circularReplacer, space)
   } catch (error) {
     console.error("JSON stringify error:", error)
-    return null
+    return `[Stringify Error: ${safeConvertToString(error)}]`
   }
 }
 
@@ -138,31 +147,41 @@ export function safeStringify(
  */
 export function deepClone<T>(obj: T): T {
   try {
-    if (obj === null || typeof obj !== "object") {
+    if (obj === null || obj === undefined) {
+      return obj
+    }
+
+    if (typeof obj !== "object") {
       return obj
     }
 
     // Handle dates
     if (obj instanceof Date) {
-      return new Date(obj.getTime()) as T
+      const time = (obj as Date).getTime()
+      return (isNaN(time) ? new Date() : new Date(time)) as T
     }
 
     // Handle arrays
-    if (isArray(obj)) {
+    if (Array.isArray(obj)) {
       return obj.map((item) => deepClone(item)) as T
     }
 
     // Handle regular objects
-    if (isObject(obj)) {
+    if (obj.constructor === Object || obj.constructor === undefined) {
       const cloned = {} as T
       for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
-          ;(cloned as any)[key] = deepClone((obj as any)[key])
+          try {
+            ;(cloned as any)[key] = deepClone((obj as any)[key])
+          } catch (err) {
+            ;(cloned as any)[key] = `[Clone Error: ${safeConvertToString(err)}]`
+          }
         }
       }
       return cloned
     }
 
+    // For other object types, return as-is
     return obj
   } catch (error) {
     console.error("Deep clone error:", error)
@@ -189,11 +208,14 @@ export function deepEqual(a: any, b: any): boolean {
 
     // Date objects
     if (a instanceof Date && b instanceof Date) {
-      return a.getTime() === b.getTime()
+      const timeA = a.getTime()
+      const timeB = b.getTime()
+      if (isNaN(timeA) && isNaN(timeB)) return true
+      return timeA === timeB
     }
 
     // Array comparison
-    if (isArray(a) && isArray(b)) {
+    if (Array.isArray(a) && Array.isArray(b)) {
       if (a.length !== b.length) return false
       for (let i = 0; i < a.length; i++) {
         if (!deepEqual(a[i], b[i])) return false
@@ -202,7 +224,7 @@ export function deepEqual(a: any, b: any): boolean {
     }
 
     // Object comparison
-    if (isObject(a) && isObject(b)) {
+    if (a.constructor === Object && b.constructor === Object) {
       const keysA = Object.keys(a)
       const keysB = Object.keys(b)
 
@@ -233,7 +255,7 @@ export function compareJson(a: any, b: any, path = ""): JsonCompareResult {
       if (obj1 === obj2) return
 
       if (obj1 == null || obj2 == null) {
-        differences.push(`${currentPath}: ${String(obj1)} !== ${String(obj2)}`)
+        differences.push(`${currentPath}: ${safeConvertToString(obj1)} !== ${safeConvertToString(obj2)}`)
         return
       }
 
@@ -243,11 +265,11 @@ export function compareJson(a: any, b: any, path = ""): JsonCompareResult {
       }
 
       if (typeof obj1 !== "object") {
-        differences.push(`${currentPath}: ${String(obj1)} !== ${String(obj2)}`)
+        differences.push(`${currentPath}: ${safeConvertToString(obj1)} !== ${safeConvertToString(obj2)}`)
         return
       }
 
-      if (isArray(obj1) && isArray(obj2)) {
+      if (Array.isArray(obj1) && Array.isArray(obj2)) {
         if (obj1.length !== obj2.length) {
           differences.push(`${currentPath}: array length mismatch (${obj1.length} vs ${obj2.length})`)
         }
@@ -266,7 +288,7 @@ export function compareJson(a: any, b: any, path = ""): JsonCompareResult {
         return
       }
 
-      if (isObject(obj1) && isObject(obj2)) {
+      if (obj1.constructor === Object && obj2.constructor === Object) {
         const keys1 = Object.keys(obj1)
         const keys2 = Object.keys(obj2)
         const allKeys = new Set([...keys1, ...keys2])
@@ -285,7 +307,7 @@ export function compareJson(a: any, b: any, path = ""): JsonCompareResult {
         return
       }
 
-      differences.push(`${currentPath}: ${String(obj1)} !== ${String(obj2)}`)
+      differences.push(`${currentPath}: ${safeConvertToString(obj1)} !== ${safeConvertToString(obj2)}`)
     }
 
     findDifferences(a, b, path)
@@ -297,7 +319,7 @@ export function compareJson(a: any, b: any, path = ""): JsonCompareResult {
   } catch (error) {
     return {
       equal: false,
-      differences: [`Comparison error: ${error instanceof Error ? error.message : String(error)}`],
+      differences: [`Comparison error: ${safeConvertToString(error)}`],
     }
   }
 }
@@ -307,15 +329,19 @@ export function compareJson(a: any, b: any, path = ""): JsonCompareResult {
  */
 export function sanitizeJson(data: any): any {
   try {
-    if (data === null || typeof data !== "object") {
+    if (data === null || data === undefined) {
       return data
     }
 
-    if (isArray(data)) {
+    if (typeof data !== "object") {
+      return data
+    }
+
+    if (Array.isArray(data)) {
       return data.map(sanitizeJson)
     }
 
-    if (isObject(data)) {
+    if (data.constructor === Object) {
       const sanitized: any = {}
       for (const key in data) {
         if (Object.prototype.hasOwnProperty.call(data, key)) {
@@ -323,7 +349,11 @@ export function sanitizeJson(data: any): any {
           if (key === "__proto__" || key === "constructor" || key === "prototype") {
             continue
           }
-          sanitized[key] = sanitizeJson(data[key])
+          try {
+            sanitized[key] = sanitizeJson(data[key])
+          } catch (err) {
+            sanitized[key] = `[Sanitization Error: ${safeConvertToString(err)}]`
+          }
         }
       }
       return sanitized
@@ -332,7 +362,7 @@ export function sanitizeJson(data: any): any {
     return data
   } catch (error) {
     console.error("JSON sanitization error:", error)
-    return null
+    return `[Sanitization Error: ${safeConvertToString(error)}]`
   }
 }
 
@@ -378,8 +408,8 @@ export function validateJsonStructure(
         return
       }
 
-      if (isArray(expected)) {
-        if (!isArray(obj)) {
+      if (Array.isArray(expected)) {
+        if (!Array.isArray(obj)) {
           errors.push(`${path}: expected array, got ${typeof obj}`)
           return
         }
@@ -393,8 +423,8 @@ export function validateJsonStructure(
         return
       }
 
-      if (isObject(expected)) {
-        if (!isObject(obj)) {
+      if (expected && typeof expected === "object" && expected.constructor === Object) {
+        if (!obj || typeof obj !== "object" || obj.constructor !== Object) {
           errors.push(`${path}: expected object, got ${typeof obj}`)
           return
         }
@@ -412,7 +442,7 @@ export function validateJsonStructure(
         return
       }
     } catch (error) {
-      errors.push(`${path}: validation error - ${error instanceof Error ? error.message : String(error)}`)
+      errors.push(`${path}: validation error - ${safeConvertToString(error)}`)
     }
   }
 
@@ -428,17 +458,7 @@ export function validateJsonStructure(
  * Safely converts any value to a string representation
  */
 export function safeToString(value: any): string {
-  if (value === null || value === undefined) return ""
-  if (typeof value === "string") return value
-  if (typeof value === "number" || typeof value === "boolean") return String(value)
-  if (typeof value === "object") {
-    try {
-      return JSON.stringify(value)
-    } catch (e) {
-      return "[Object]"
-    }
-  }
-  return String(value)
+  return safeConvertToString(value)
 }
 
 /**
@@ -462,40 +482,53 @@ export function safeClone<T>(obj: T): T {
 
     seen.set(item, true)
 
-    if (Array.isArray(item)) {
-      return item.map((i) => clone(i))
+    try {
+      if (Array.isArray(item)) {
+        return item.map((i) => clone(i))
+      }
+
+      if (item instanceof Date) {
+        const time = item.getTime()
+        return isNaN(time) ? new Date() : new Date(time)
+      }
+
+      if (item instanceof RegExp) {
+        return new RegExp(item.source, item.flags)
+      }
+
+      if (item instanceof Map) {
+        const map = new Map()
+        item.forEach((value, key) => {
+          map.set(key, clone(value))
+        })
+        return map
+      }
+
+      if (item instanceof Set) {
+        const set = new Set()
+        item.forEach((value) => {
+          set.add(clone(value))
+        })
+        return set
+      }
+
+      if (item.constructor === Object || item.constructor === undefined) {
+        const result: Record<string, any> = {}
+        Object.keys(item).forEach((key) => {
+          try {
+            result[key] = clone(item[key])
+          } catch (err) {
+            result[key] = `[Clone Error: ${safeConvertToString(err)}]`
+          }
+        })
+        return result
+      }
+
+      // For other object types, return as-is
+      return item
+    } catch (err) {
+      return `[Clone Error: ${safeConvertToString(err)}]`
     }
-
-    if (item instanceof Date) {
-      return new Date(item)
-    }
-
-    if (item instanceof RegExp) {
-      return new RegExp(item.source, item.flags)
-    }
-
-    if (item instanceof Map) {
-      const map = new Map()
-      item.forEach((value, key) => {
-        map.set(key, clone(value))
-      })
-      return map
-    }
-
-    if (item instanceof Set) {
-      const set = new Set()
-      item.forEach((value) => {
-        set.add(clone(value))
-      })
-      return set
-    }
-
-    const result: Record<string, any> = {}
-    Object.keys(item).forEach((key) => {
-      result[key] = clone(item[key])
-    })
-
-    return result
   }
 
   return clone(obj) as T
@@ -512,7 +545,8 @@ export function isPlainObject(value: any): boolean {
     !(value instanceof Date) &&
     !(value instanceof RegExp) &&
     !(value instanceof Map) &&
-    !(value instanceof Set)
+    !(value instanceof Set) &&
+    (value.constructor === Object || value.constructor === undefined)
   )
 }
 

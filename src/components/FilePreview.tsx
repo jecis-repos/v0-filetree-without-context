@@ -16,16 +16,7 @@ import { getTheme, getAvailableThemes, type PreviewTheme } from "../utils/Previe
 import { FilePathParser, type VisualizationOptions } from "../utils/FilePathParser"
 import { ErrorBoundary } from "./ErrorBoundary"
 import { errorTracker } from "../services/ErrorTrackingService"
-import {
-  safeString,
-  safeNumber,
-  safeArray,
-  safeObject,
-  isObject,
-  isString,
-  isNumber,
-  isNullOrUndefined,
-} from "../utils/type-guards"
+import { safeToString, safeToNumber, safeToBoolean, safeGet, safeEquals } from "../utils/safe-conversions"
 
 interface FilePreviewProps {
   file: FileNode | null
@@ -74,7 +65,7 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ file, container }) => 
   }, [])
 
   useEffect(() => {
-    if (file && safeString(file.type) === "file") {
+    if (file && safeEquals(safeGet(file, "type"), "file")) {
       loadFileContent()
     } else {
       setContent(null)
@@ -89,10 +80,11 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ file, container }) => 
 
     try {
       const provider = container.resolve("IFileSystemProvider")
-      const fileContent = await provider.getFileContent(safeString(file.path))
+      const filePath = safeToString(safeGet(file, "path"))
+      const fileContent = await provider.getFileContent(filePath)
 
       if (fileContent) {
-        if (isString(fileContent)) {
+        if (typeof fileContent === "string") {
           setContent(fileContent)
         } else {
           setContent("[Binary content]")
@@ -108,7 +100,7 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ file, container }) => 
         severity: "medium",
         component: "FilePreview",
         action: "load_file_content",
-        metadata: { filePath: safeString(file?.path) },
+        metadata: { filePath: safeToString(safeGet(file, "path")) },
       })
     } finally {
       setIsLoading(false)
@@ -120,17 +112,19 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ file, container }) => 
 
     const traverse = (n: FileNode) => {
       try {
-        const nodePath = safeString(n?.path)
+        const nodePath = safeToString(safeGet(n, "path"))
         if (nodePath) {
           paths.push(nodePath)
         }
 
-        const children = safeArray(n?.children)
-        children.forEach((child) => {
-          if (isObject(child)) {
-            traverse(child as FileNode)
-          }
-        })
+        const children = safeGet(n, "children", [])
+        if (Array.isArray(children)) {
+          children.forEach((child) => {
+            if (child && typeof child === "object") {
+              traverse(child as FileNode)
+            }
+          })
+        }
       } catch (err) {
         errorTracker.captureError(err, {
           type: "runtime",
@@ -147,106 +141,135 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ file, container }) => 
 
   const renderDirectoryPreview = (directory: FileNode) => {
     try {
-      const children = safeArray(directory?.children)
-      if (children.length === 0) return null
+      const children = safeGet(directory, "children", [])
+      if (!Array.isArray(children) || children.length === 0) return null
 
       const filePaths = extractFilePathsFromNode(directory)
       const parsedStructure = FilePathParser.parseFilePaths(filePaths, visualizationOptions)
 
-      const scaleValue = safeNumber(previewScale, 100)
-      const fontSize = safeNumber((14 * scaleValue) / 100, 14)
+      const scaleValue = safeToNumber(previewScale, 100)
+      const fontSize = safeToNumber((14 * scaleValue) / 100, 14)
+
+      // Safe theme property access
+      const backgroundColor = safeToString(safeGet(theme, "colors.background", "#ffffff"))
+      const textColor = safeToString(safeGet(theme, "colors.textPrimary", "#000000"))
+      const fontFamily = safeToString(safeGet(theme, "fonts.primary", "Arial, sans-serif"))
+      const padding = safeToString(safeToNumber(safeGet(theme, "spacing.padding", 16)))
+      const borderColor = safeToString(safeGet(theme, "colors.border", "#e5e5e5"))
+      const lineHeight = safeToString(safeToNumber(safeGet(theme, "spacing.lineHeight", 1.5)))
 
       return (
         <div
           className="directory-preview"
           style={{
-            backgroundColor: safeString(theme?.colors?.background),
-            color: safeString(theme?.colors?.textPrimary),
-            fontFamily: safeString(theme?.fonts?.primary),
-            padding: safeString(theme?.spacing?.padding),
+            backgroundColor,
+            color: textColor,
+            fontFamily,
+            padding: `${padding}px`,
             borderRadius: "8px",
-            border: `1px solid ${safeString(theme?.colors?.border)}`,
+            border: `1px solid ${borderColor}`,
             fontSize: `${fontSize}px`,
-            lineHeight: safeString(theme?.spacing?.lineHeight),
+            lineHeight,
             transform: `scale(${scaleValue / 100})`,
             transformOrigin: "top left",
             width: `${(100 / scaleValue) * 100}%`,
             height: `${(100 / scaleValue) * 100}%`,
           }}
         >
-          <div className="directory-header" style={{ marginBottom: safeNumber(theme?.spacing?.margin, 8) * 2 }}>
+          <div
+            className="directory-header"
+            style={{ marginBottom: `${safeToNumber(safeGet(theme, "spacing.margin", 8)) * 2}px` }}
+          >
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
                 fontSize: "1.2em",
                 fontWeight: "bold",
-                color: safeString(theme?.colors?.primary),
-                marginBottom: safeNumber(theme?.spacing?.margin, 8),
+                color: safeToString(safeGet(theme, "colors.primary", "#0066cc")),
+                marginBottom: `${safeToNumber(safeGet(theme, "spacing.margin", 8))}px`,
               }}
             >
-              {theme?.layout?.showIcons && (
+              {safeToBoolean(safeGet(theme, "layout.showIcons")) && (
                 <Folder
-                  size={safeNumber(theme?.icons?.size, 16) + 4}
+                  size={safeToNumber(safeGet(theme, "icons.size", 16)) + 4}
                   style={{
-                    marginRight: safeNumber(theme?.spacing?.margin, 8),
-                    color: safeString(theme?.colors?.directoryIcon),
+                    marginRight: `${safeToNumber(safeGet(theme, "spacing.margin", 8))}px`,
+                    color: safeToString(safeGet(theme, "colors.directoryIcon", "#0066cc")),
                   }}
                 />
               )}
-              {safeString(directory?.name)}
+              {safeToString(safeGet(directory, "name", "Unknown Directory"))}
             </div>
 
-            {theme?.layout?.showFileSize && (
+            {safeToBoolean(safeGet(theme, "layout.showFileSize")) && (
               <div
                 style={{
                   fontSize: "0.85em",
-                  color: safeString(theme?.colors?.textSecondary),
+                  color: safeToString(safeGet(theme, "colors.textSecondary", "#666666")),
                   display: "flex",
-                  gap: safeNumber(theme?.spacing?.margin, 8) * 2,
+                  gap: `${safeToNumber(safeGet(theme, "spacing.margin", 8)) * 2}px`,
                 }}
               >
-                <span>{safeNumber(parsedStructure?.metadata?.totalFiles, 0)} files</span>
-                <span>{safeNumber(parsedStructure?.metadata?.totalDirectories, 0)} directories</span>
-                <span>Depth: {safeNumber(parsedStructure?.metadata?.maxDepth, 0)}</span>
+                <span>{safeToNumber(safeGet(parsedStructure, "metadata.totalFiles", 0))} files</span>
+                <span>{safeToNumber(safeGet(parsedStructure, "metadata.totalDirectories", 0))} directories</span>
+                <span>Depth: {safeToNumber(safeGet(parsedStructure, "metadata.maxDepth", 0))}</span>
               </div>
             )}
           </div>
 
-          <div className="directory-content">{renderParsedNodes(safeArray(parsedStructure?.nodes), theme, 0)}</div>
+          <div className="directory-content">{renderParsedNodes(safeGet(parsedStructure, "nodes", []), theme, 0)}</div>
 
-          {isObject(parsedStructure?.metadata?.fileTypes) &&
-            Object.keys(parsedStructure.metadata.fileTypes).length > 0 && (
+          {(() => {
+            const fileTypes = safeGet(parsedStructure, "metadata.fileTypes", {})
+            const hasFileTypes =
+              typeof fileTypes === "object" && fileTypes !== null && Object.keys(fileTypes).length > 0
+
+            if (!hasFileTypes) return null
+
+            return (
               <div
                 className="file-types-summary"
                 style={{
-                  marginTop: safeNumber(theme?.spacing?.margin, 8) * 2,
-                  padding: safeNumber(theme?.spacing?.padding, 16) / 2,
-                  backgroundColor: safeString(theme?.colors?.muted),
+                  marginTop: `${safeToNumber(safeGet(theme, "spacing.margin", 8)) * 2}px`,
+                  padding: `${safeToNumber(safeGet(theme, "spacing.padding", 16)) / 2}px`,
+                  backgroundColor: safeToString(safeGet(theme, "colors.muted", "#f5f5f5")),
                   borderRadius: "4px",
                   fontSize: "0.8em",
                 }}
               >
-                <div style={{ fontWeight: "bold", marginBottom: safeNumber(theme?.spacing?.margin, 8) / 2 }}>
+                <div
+                  style={{
+                    fontWeight: "bold",
+                    marginBottom: `${safeToNumber(safeGet(theme, "spacing.margin", 8)) / 2}px`,
+                  }}
+                >
                   File Types:
                 </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: safeNumber(theme?.spacing?.margin, 8) }}>
-                  {Object.entries(safeObject(parsedStructure?.metadata?.fileTypes)).map(([type, count]) => (
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: `${safeToNumber(safeGet(theme, "spacing.margin", 8))}px`,
+                  }}
+                >
+                  {Object.entries(fileTypes).map(([type, count]) => (
                     <span
-                      key={safeString(type)}
+                      key={safeToString(type)}
                       style={{
-                        backgroundColor: safeString(theme?.colors?.background),
+                        backgroundColor,
                         padding: "2px 6px",
                         borderRadius: "3px",
-                        border: `1px solid ${safeString(theme?.colors?.border)}`,
+                        border: `1px solid ${borderColor}`,
                       }}
                     >
-                      .{safeString(type)} ({safeNumber(count, 0)})
+                      .{safeToString(type)} ({safeToNumber(count, 0)})
                     </span>
                   ))}
                 </div>
               </div>
-            )}
+            )
+          })()}
         </div>
       )
     } catch (err) {
@@ -266,16 +289,24 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ file, container }) => 
 
   const renderParsedNodes = (nodes: any[], theme: PreviewTheme, depth = 0): React.ReactNode => {
     try {
-      const safeNodes = safeArray(nodes)
-      if (safeNodes.length === 0) return null
+      if (!Array.isArray(nodes) || nodes.length === 0) return null
 
-      return safeNodes.map((node, index) => {
-        if (!isObject(node)) return null
+      return nodes.map((node, index) => {
+        if (!node || typeof node !== "object") return null
 
-        const nodeId = safeString(node?.id) || `node-${safeNumber(index, 0)}`
-        const nodeName = safeString(node?.name) || `Unknown ${safeNumber(index, 0)}`
-        const nodeType = safeString(node?.type) || "unknown"
-        const nodeSize = isNumber(node?.size) ? node.size : undefined
+        const nodeId = safeToString(safeGet(node, "id", `node-${index}`))
+        const nodeName = safeToString(safeGet(node, "name", `Unknown ${index}`))
+        const nodeType = safeToString(safeGet(node, "type", "unknown"))
+        const nodeSize = safeGet(node, "size")
+        const hasSize = typeof nodeSize === "number" && !isNaN(nodeSize)
+
+        const paddingValue = safeToNumber(safeGet(theme, "spacing.padding", 16)) / 4
+        const indentationValue = safeToNumber(safeGet(theme, "spacing.indentation", 20))
+        const marginValue = safeToNumber(safeGet(theme, "spacing.margin", 8))
+        const showLines = safeToBoolean(safeGet(theme, "layout.showLines"))
+        const showIcons = safeToBoolean(safeGet(theme, "layout.showIcons"))
+        const showFileSize = safeToBoolean(safeGet(theme, "layout.showFileSize"))
+        const showLastModified = safeToBoolean(safeGet(theme, "layout.showLastModified"))
 
         return (
           <div
@@ -283,38 +314,40 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ file, container }) => 
             style={{
               display: "flex",
               alignItems: "center",
-              padding: `${safeNumber(theme?.spacing?.padding, 16) / 4}px 0`,
-              paddingLeft: safeNumber(depth, 0) * safeNumber(theme?.spacing?.indentation, 20),
+              padding: `${paddingValue}px 0`,
+              paddingLeft: `${depth * indentationValue}px`,
               borderLeft:
-                theme?.layout?.showLines && depth > 0 ? `1px solid ${safeString(theme?.colors?.border)}` : "none",
-              marginLeft: theme?.layout?.showLines && depth > 0 ? safeNumber(theme?.spacing?.margin, 8) : 0,
+                showLines && depth > 0
+                  ? `1px solid ${safeToString(safeGet(theme, "colors.border", "#e5e5e5"))}`
+                  : "none",
+              marginLeft: showLines && depth > 0 ? `${marginValue}px` : "0",
             }}
             className="file-node-preview"
           >
-            {theme?.layout?.showLines && depth > 0 && (
+            {showLines && depth > 0 && (
               <div
                 style={{
-                  width: safeNumber(theme?.spacing?.indentation, 20) / 2,
+                  width: `${indentationValue / 2}px`,
                   height: "1px",
-                  backgroundColor: safeString(theme?.colors?.border),
-                  marginRight: safeNumber(theme?.spacing?.margin, 8),
+                  backgroundColor: safeToString(safeGet(theme, "colors.border", "#e5e5e5")),
+                  marginRight: `${marginValue}px`,
                 }}
               />
             )}
 
-            {theme?.layout?.showIcons && (
-              <div style={{ marginRight: safeNumber(theme?.spacing?.margin, 8) }}>
-                {nodeType === "directory" ? (
+            {showIcons && (
+              <div style={{ marginRight: `${marginValue}px` }}>
+                {safeEquals(nodeType, "directory") ? (
                   <Folder
-                    size={safeNumber(theme?.icons?.size, 16)}
-                    style={{ color: safeString(theme?.colors?.directoryIcon) }}
-                    fill={theme?.icons?.style === "filled" ? "currentColor" : "none"}
+                    size={safeToNumber(safeGet(theme, "icons.size", 16))}
+                    style={{ color: safeToString(safeGet(theme, "colors.directoryIcon", "#0066cc")) }}
+                    fill={safeEquals(safeGet(theme, "icons.style"), "filled") ? "currentColor" : "none"}
                   />
                 ) : (
                   <File
-                    size={safeNumber(theme?.icons?.size, 16)}
-                    style={{ color: safeString(theme?.colors?.fileIcon) }}
-                    fill={theme?.icons?.style === "filled" ? "currentColor" : "none"}
+                    size={safeToNumber(safeGet(theme, "icons.size", 16))}
+                    style={{ color: safeToString(safeGet(theme, "colors.fileIcon", "#666666")) }}
+                    fill={safeEquals(safeGet(theme, "icons.style"), "filled") ? "currentColor" : "none"}
                   />
                 )}
               </div>
@@ -323,40 +356,43 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ file, container }) => 
             <span
               style={{
                 flexGrow: 1,
-                color:
-                  nodeType === "directory"
-                    ? safeString(theme?.colors?.primary)
-                    : safeString(theme?.colors?.textPrimary),
-                fontWeight: nodeType === "directory" ? "bold" : "normal",
+                color: safeEquals(nodeType, "directory")
+                  ? safeToString(safeGet(theme, "colors.primary", "#0066cc"))
+                  : safeToString(safeGet(theme, "colors.textPrimary", "#000000")),
+                fontWeight: safeEquals(nodeType, "directory") ? "bold" : "normal",
               }}
             >
               {nodeName}
             </span>
 
-            {theme?.layout?.showFileSize && nodeSize !== undefined && (
+            {showFileSize && hasSize && (
               <span
                 style={{
                   fontSize: "0.85em",
-                  color: safeString(theme?.colors?.textSecondary),
-                  marginLeft: safeNumber(theme?.spacing?.margin, 8),
-                  fontFamily: safeString(theme?.fonts?.mono),
+                  color: safeToString(safeGet(theme, "colors.textSecondary", "#666666")),
+                  marginLeft: `${marginValue}px`,
+                  fontFamily: safeToString(safeGet(theme, "fonts.mono", "monospace")),
                 }}
               >
-                {formatBytes(nodeSize)}
+                {formatBytes(safeToNumber(nodeSize))}
               </span>
             )}
 
-            {theme?.layout?.showLastModified && node?.lastModified && (
+            {showLastModified && safeGet(node, "lastModified") && (
               <span
                 style={{
                   fontSize: "0.8em",
-                  color: safeString(theme?.colors?.textSecondary),
-                  marginLeft: safeNumber(theme?.spacing?.margin, 8),
+                  color: safeToString(safeGet(theme, "colors.textSecondary", "#666666")),
+                  marginLeft: `${marginValue}px`,
                 }}
               >
-                {node.lastModified instanceof Date
-                  ? node.lastModified.toLocaleDateString()
-                  : safeString(node.lastModified)}
+                {(() => {
+                  const lastModified = safeGet(node, "lastModified")
+                  if (lastModified instanceof Date) {
+                    return lastModified.toLocaleDateString()
+                  }
+                  return safeToString(lastModified)
+                })()}
               </span>
             )}
           </div>
@@ -378,8 +414,9 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ file, container }) => 
       if (!file) return
 
       const imageExportService = container.resolve("ImageExportService")
+      const fileType = safeToString(safeGet(file, "type"))
 
-      if (safeString(file.type) === "directory") {
+      if (safeEquals(fileType, "directory")) {
         const filePaths = extractFilePathsFromNode(file)
         if (filePaths.length === 0) {
           errorTracker.captureUserError("export_preview", "No valid file paths found", "FilePreview")
@@ -391,12 +428,13 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ file, container }) => 
           height: 800,
           format: "png",
           theme: selectedTheme,
-          backgroundColor: safeString(theme?.colors?.background),
-          textColor: safeString(theme?.colors?.textPrimary),
+          backgroundColor: safeToString(safeGet(theme, "colors.background", "#ffffff")),
+          textColor: safeToString(safeGet(theme, "colors.textPrimary", "#000000")),
         })
 
         if (result && result.success) {
-          await imageExportService.downloadImage(result, `${safeString(file.name)}-preview.png`)
+          const fileName = `${safeToString(safeGet(file, "name", "preview"))}-preview.png`
+          await imageExportService.downloadImage(result, fileName)
         }
       }
     } catch (err) {
@@ -409,7 +447,7 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ file, container }) => 
     }
   }
 
-  if (isNullOrUndefined(file)) {
+  if (!file) {
     return (
       <Card className="h-full flex items-center justify-center">
         <CardContent className="text-center p-6 text-gray-500 dark:text-gray-400">
@@ -420,7 +458,15 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ file, container }) => 
     )
   }
 
-  const fileMimeType = safeString(file?.mimeType)
+  const fileMimeType = safeToString(safeGet(file, "mimeType", ""))
+  const fileName = safeToString(safeGet(file, "name", "Unknown"))
+  const filePath = safeToString(safeGet(file, "path", ""))
+  const fileType = safeToString(safeGet(file, "type", ""))
+  const fileSize = safeGet(file, "size")
+  const lastModified = safeGet(file, "lastModified")
+  const children = safeGet(file, "children", [])
+  const metadata = safeGet(file, "metadata", {})
+
   const isImage = fileMimeType.startsWith("image/")
   const isText =
     fileMimeType.startsWith("text/") ||
@@ -434,9 +480,9 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ file, container }) => 
         <CardHeader className="flex-shrink-0">
           <CardTitle className="flex items-center justify-between">
             <div className="flex items-center">
-              <span className="truncate">{safeString(file?.name)}</span>
+              <span className="truncate">{fileName}</span>
               <Badge variant="outline" className="ml-2">
-                {safeString(file?.type) === "directory" ? "Directory" : fileMimeType.split("/")[1] || "File"}
+                {safeEquals(fileType, "directory") ? "Directory" : fileMimeType.split("/")[1] || "File"}
               </Badge>
             </div>
             <div className="flex items-center gap-2">
@@ -460,7 +506,7 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ file, container }) => 
             </div>
           ) : (
             <Tabs
-              defaultValue={safeString(file?.type) === "directory" ? "preview" : "details"}
+              defaultValue={safeEquals(fileType, "directory") ? "preview" : "details"}
               className="h-full flex flex-col"
             >
               <TabsList className="grid w-full grid-cols-4">
@@ -477,50 +523,50 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ file, container }) => 
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <p>
-                      <span className="font-medium">Path:</span> {safeString(file?.path)}
+                      <span className="font-medium">Path:</span> {filePath}
                     </p>
-                    {file?.size && (
+                    {typeof fileSize === "number" && !isNaN(fileSize) && (
                       <p>
-                        <span className="font-medium">Size:</span> {formatBytes(safeNumber(file.size, 0))}
+                        <span className="font-medium">Size:</span> {formatBytes(fileSize)}
                       </p>
                     )}
                     <p>
-                      <span className="font-medium">Type:</span> {fileMimeType || safeString(file?.type)}
+                      <span className="font-medium">Type:</span> {fileMimeType || fileType}
                     </p>
-                    {file?.lastModified && (
+                    {lastModified && (
                       <p>
                         <span className="font-medium">Last Modified:</span>{" "}
-                        {file.lastModified instanceof Date
-                          ? file.lastModified.toLocaleString()
-                          : safeString(file.lastModified)}
+                        {lastModified instanceof Date ? lastModified.toLocaleString() : safeToString(lastModified)}
                       </p>
                     )}
-                    {safeString(file?.type) === "directory" && file?.children && (
+                    {safeEquals(fileType, "directory") && Array.isArray(children) && (
                       <p>
-                        <span className="font-medium">Items:</span> {safeArray(file.children).length}
+                        <span className="font-medium">Items:</span> {children.length}
                       </p>
                     )}
                   </div>
 
-                  {file?.metadata &&
-                    isObject(file.metadata) &&
-                    Object.keys(file.metadata).filter((k) => k !== "_content").length > 0 && (
+                  {(() => {
+                    if (!metadata || typeof metadata !== "object") return null
+                    const filteredMetadata = Object.entries(metadata).filter(([key]) => key !== "_content")
+                    if (filteredMetadata.length === 0) return null
+
+                    return (
                       <div>
                         <h3 className="text-sm font-medium mb-2">Metadata</h3>
                         <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded text-sm">
-                          {Object.entries(safeObject(file.metadata))
-                            .filter(([key]) => key !== "_content")
-                            .map(([key, value]) => (
-                              <div key={key} className="grid grid-cols-3 gap-2 mb-1">
-                                <span className="font-mono text-xs">{safeString(key)}:</span>
-                                <span className="col-span-2 font-mono text-xs truncate">
-                                  {isObject(value) ? JSON.stringify(value) : safeString(value)}
-                                </span>
-                              </div>
-                            ))}
+                          {filteredMetadata.map(([key, value]) => (
+                            <div key={key} className="grid grid-cols-3 gap-2 mb-1">
+                              <span className="font-mono text-xs">{safeToString(key)}:</span>
+                              <span className="col-span-2 font-mono text-xs truncate">
+                                {typeof value === "object" ? JSON.stringify(value) : safeToString(value)}
+                              </span>
+                            </div>
+                          ))}
                         </div>
                       </div>
-                    )}
+                    )
+                  })()}
                 </div>
               </TabsContent>
 
@@ -536,9 +582,12 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ file, container }) => 
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {availableThemes.map((theme) => (
-                            <SelectItem key={safeString(theme?.id)} value={safeString(theme?.id)}>
-                              {safeString(theme?.name)}
+                          {availableThemes.map((themeOption) => (
+                            <SelectItem
+                              key={safeToString(safeGet(themeOption, "id", ""))}
+                              value={safeToString(safeGet(themeOption, "id", ""))}
+                            >
+                              {safeToString(safeGet(themeOption, "name", ""))}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -553,13 +602,13 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ file, container }) => 
                         min={50}
                         max={150}
                         step={10}
-                        onValueChange={([value]) => setPreviewScale(safeNumber(value, 100))}
+                        onValueChange={([value]) => setPreviewScale(safeToNumber(value, 100))}
                         className="w-24"
                       />
-                      <span className="text-sm w-12">{safeNumber(previewScale, 100)}%</span>
+                      <span className="text-sm w-12">{safeToNumber(previewScale, 100)}%</span>
                     </div>
 
-                    {safeString(file?.type) === "directory" && (
+                    {safeEquals(fileType, "directory") && (
                       <div className="flex items-center gap-2">
                         <Label>Structure:</Label>
                         <Select
@@ -587,16 +636,19 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ file, container }) => 
 
                   {/* Preview Content */}
                   <div className="border rounded overflow-auto" style={{ maxHeight: "500px" }}>
-                    {safeString(file?.type) === "directory" ? (
+                    {safeEquals(fileType, "directory") ? (
                       renderDirectoryPreview(file)
                     ) : isImage ? (
                       <div className="p-4 flex items-center justify-center">
                         <img
-                          src={safeString(file?.previewUrl) || safeString(file?.thumbnailUrl)}
-                          alt={safeString(file?.name)}
+                          src={
+                            safeToString(safeGet(file, "previewUrl", safeGet(file, "thumbnailUrl", ""))) ||
+                            "/placeholder.svg"
+                          }
+                          alt={fileName}
                           className="max-w-full max-h-[400px] object-contain"
                           style={{
-                            transform: `scale(${safeNumber(previewScale, 100) / 100})`,
+                            transform: `scale(${safeToNumber(previewScale, 100) / 100})`,
                             transformOrigin: "center",
                           }}
                         />
@@ -615,8 +667,11 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ file, container }) => 
                 <TabsContent value="image" className="flex-grow flex items-center justify-center p-4">
                   <div className="image-preview max-w-full max-h-full">
                     <img
-                      src={safeString(file?.previewUrl) || safeString(file?.thumbnailUrl)}
-                      alt={safeString(file?.name)}
+                      src={
+                        safeToString(safeGet(file, "previewUrl", safeGet(file, "thumbnailUrl", ""))) ||
+                        "/placeholder.svg"
+                      }
+                      alt={fileName}
                       className="max-w-full max-h-[500px] object-contain"
                     />
                   </div>
@@ -645,7 +700,7 @@ export const FilePreview: React.FC<FilePreviewProps> = ({ file, container }) => 
 }
 
 function formatBytes(bytes: number): string {
-  const safeBytes = safeNumber(bytes, 0)
+  const safeBytes = safeToNumber(bytes, 0)
   if (safeBytes === 0) return "0 B"
   const k = 1024
   const sizes = ["B", "KB", "MB", "GB"]

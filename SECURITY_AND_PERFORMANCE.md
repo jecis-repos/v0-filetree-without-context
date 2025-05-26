@@ -6,7 +6,7 @@ This document outlines the security and performance improvements implemented fol
 
 ### 1. Environment Variable Security
 
-**Problem Solved**: Prevented `NEXT_PUBLIC_PHP_API_KEY` exposure in client-side code.
+**Problem Solved**: Prevented sensitive API keys from being exposed in client-side code by ensuring all sensitive variables are server-side only.
 
 **Implementation**:
 - Created `lib/env-config.ts` with proper separation of server-side and client-side variables
@@ -87,6 +87,7 @@ PHP_API_KEY=your-secure-api-key
 PHP_ENDPOINT=https://your-php-service.com
 DATABASE_URL=your-database-url
 INTERNAL_API_SECRET=your-internal-secret
+ANALYTICS_SECRET=your-analytics-secret
 \`\`\`
 
 #### Client-Side (Public)
@@ -94,8 +95,11 @@ INTERNAL_API_SECRET=your-internal-secret
 NEXT_PUBLIC_API_BASE_URL=/api
 NEXT_PUBLIC_ENVIRONMENT=production
 NEXT_PUBLIC_ENABLE_ANALYTICS=true
+NEXT_PUBLIC_ENABLE_DEBUG=false
 NEXT_PUBLIC_WASM_BASE_URL=/wasm
 NEXT_PUBLIC_CDN_URL=https://your-cdn.com
+NEXT_PUBLIC_MAX_FILE_SIZE=10485760
+NEXT_PUBLIC_CACHE_TTL=300000
 \`\`\`
 
 ### PHP-WASM Configuration
@@ -112,8 +116,9 @@ The service is configured with:
 ### Vercel Deployment
 
 1. **Environment Variables**:
-   - Add all server-side variables in Vercel dashboard
-   - Ensure no sensitive data in client-side variables
+   - Add all server-side variables (without NEXT_PUBLIC_ prefix) in Vercel dashboard
+   - Ensure sensitive data like API keys are NEVER prefixed with NEXT_PUBLIC_
+   - Only use NEXT_PUBLIC_ prefix for non-sensitive configuration values
    - Validate all required variables are set
 
 2. **Static Assets**:
@@ -198,3 +203,13 @@ Structured logging with:
    - Real-time performance dashboards
    - Automated alerting
    - Advanced analytics
+
+### Security Warning
+
+**CRITICAL**: Never use `NEXT_PUBLIC_` prefix for sensitive data such as:
+- API keys
+- Database credentials  
+- Authentication secrets
+- Internal service tokens
+
+These variables are exposed to the client-side code and can be viewed by anyone. Always use server-side environment variables (without the prefix) and access them through Server Actions or API routes.

@@ -2,6 +2,10 @@
  * Environment Configuration
  * Following Vercel best practices for environment variable management
  *
+ * SECURITY WARNING: Never use NEXT_PUBLIC_ prefix for sensitive data!
+ * - API keys, secrets, and credentials must be server-side only
+ * - Only use NEXT_PUBLIC_ for non-sensitive configuration values
+ *
  * References:
  * - https://vercel.com/docs/projects/environment-variables
  * - https://nextjs.org/docs/app/building-your-application/configuring/environment-variables
@@ -60,13 +64,21 @@ export const clientEnv = getClientEnv()
 export function validateEnvironment() {
   const errors: string[] = []
 
+  // Security check: Ensure no sensitive data in client environment
+  const sensitiveKeys = ["API_KEY", "SECRET", "PASSWORD", "TOKEN", "CREDENTIAL"]
+  Object.keys(process.env).forEach((key) => {
+    if (key.startsWith("NEXT_PUBLIC_") && sensitiveKeys.some((sensitive) => key.includes(sensitive))) {
+      errors.push(`Security violation: ${key} should not be prefixed with NEXT_PUBLIC_`)
+    }
+  })
+
   // Validate server environment in server context only
   if (typeof window === "undefined") {
     if (!serverEnv.PHP_ENDPOINT) {
       errors.push("PHP_ENDPOINT is required")
     }
 
-    if (serverEnv.ENVIRONMENT === "production" && !serverEnv.PHP_API_KEY) {
+    if (clientEnv.ENVIRONMENT === "production" && !serverEnv.PHP_API_KEY) {
       errors.push("PHP_API_KEY is required in production")
     }
   }
