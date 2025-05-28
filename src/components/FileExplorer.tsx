@@ -6,12 +6,7 @@ import { useEffect, useState } from "react"
 import { FileTreeExplorer } from "./FileTreeExplorer"
 import { ErrorBoundary } from "./ErrorBoundary"
 import { DIContainer } from "../container/DIContainer"
-import { LoggingService } from "../services/LoggingService"
-import { MemoryFileSystemProvider } from "../providers/MemoryFileSystemProvider"
-import { PerformanceMonitor } from "../services/PerformanceMonitor"
-import { CacheService } from "../services/CacheService"
-import { FileSystemCalculator } from "../services/FileSystemCalculator"
-import diConfig from "../config/di-config.json"
+import { ServiceLayer } from "../services/ServiceLayer"
 
 export const FileExplorer: React.FC = () => {
   const [container, setContainer] = useState<DIContainer | null>(null)
@@ -24,45 +19,26 @@ export const FileExplorer: React.FC = () => {
         setIsLoading(true)
         const newContainer = new DIContainer()
 
-        // Register concrete implementations first
-        const loggingService = new LoggingService(1000)
-        const performanceMonitor = new PerformanceMonitor()
-        const cacheService = new CacheService()
-        const fileSystemCalculator = new FileSystemCalculator(cacheService)
-        const memoryProvider = new MemoryFileSystemProvider(performanceMonitor)
+        // Initialize service layer
+        const serviceLayer = new ServiceLayer(newContainer)
+        await serviceLayer.initialize()
 
-        // Register services in container
-        newContainer.registerInstance("ILoggingService", loggingService)
-        newContainer.registerInstance("IPerformanceMonitor", performanceMonitor)
-        newContainer.registerInstance("ICacheService", cacheService)
-        newContainer.registerInstance("IFileSystemCalculator", fileSystemCalculator)
-        newContainer.registerInstance("IFileSystemProvider", memoryProvider)
-        newContainer.registerInstance("MemoryFileSystemProvider", memoryProvider)
-
-        // Try to register WASM provider if available
-        try {
-          const { WasmFileSystemProvider } = await import("../providers/WasmFileSystemProvider")
-          const wasmProvider = new WasmFileSystemProvider(performanceMonitor)
-          newContainer.registerInstance("WasmFileSystemProvider", wasmProvider)
-        } catch (error) {
-          console.warn("WASM provider not available:", error)
-        }
-
-        // Load configuration for any additional services
-        try {
-          newContainer.loadConfiguration(diConfig)
-        } catch (configError) {
-          console.warn("Failed to load DI configuration:", configError)
-        }
+        // Register the service layer itself
+        newContainer.registerInstance("ServiceLayer", serviceLayer)
 
         // Log successful initialization
-        loggingService.info("System", "DI Container initialized successfully")
+        const logger = serviceLayer.getLoggingService()
+        logger.info("System", "File Explorer initialized successfully with ServiceLayer")
+
+        // Perform health check
+        const healthCheck = await serviceLayer.healthCheck()
+        logger.info("System", "Service health check completed", healthCheck)
 
         setContainer(newContainer)
         setError(null)
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Unknown error occurred"
-        console.error("Failed to initialize DI container:", err)
+        console.error("Failed to initialize File Explorer:", err)
         setError(errorMessage)
       } finally {
         setIsLoading(false)
