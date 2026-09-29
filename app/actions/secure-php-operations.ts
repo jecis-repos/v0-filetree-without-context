@@ -54,7 +54,7 @@ function validateRequest(request: SecurePhpRequest): boolean {
 export async function executeSecurePhpOperation(request: SecurePhpRequest): Promise<SecurePhpResponse> {
   try {
     // Get client IP for rate limiting
-    const headersList = headers()
+    const headersList = await headers()
     const clientIp = headersList.get("x-forwarded-for") || "unknown"
 
     // Check rate limit
@@ -175,7 +175,7 @@ export async function checkPhpServiceHealth(): Promise<SecurePhpResponse> {
       headers: {
         Authorization: `Bearer ${serverEnv.PHP_API_KEY}`,
       },
-      timeout: 5000,
+      signal: AbortSignal.timeout(5000),
     })
 
     if (!response.ok) {
