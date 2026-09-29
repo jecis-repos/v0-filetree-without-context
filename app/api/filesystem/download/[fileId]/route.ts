@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { sanitizeForLogging } from "@/lib/security-utils"
 import { DIContainer } from "@/src/container/DIContainer"
+import type { IFileSystemProvider } from "@/src/interfaces/IFileSystemProvider"
 import { LoggingService } from "@/src/services/LoggingService"
 
 // Initialize services
@@ -21,8 +22,8 @@ try {
   })
 }
 
-export async function GET(request: NextRequest, { params }: { params: { fileId: string } }) {
-  const { fileId } = params
+export async function GET(request: NextRequest, { params }: { params: Promise<{ fileId: string }> }) {
+  const { fileId } = await params
 
   try {
     logger.info("API", "File download requested", { fileId })
@@ -34,21 +35,19 @@ export async function GET(request: NextRequest, { params }: { params: { fileId: 
     }
 
     // Get file system provider
-    const fileSystemProvider = container.resolve("IFileSystemProvider")
+    const fileSystemProvider = container.resolve<IFileSystemProvider>("IFileSystemProvider")
+    await fileSystemProvider.initialize()
 
     // Check if file exists
-    const fileExists = await fileSystemProvider.fileExists(fileId)
-    if (!fileExists) {
+    const fileInfo = await fileSystemProvider.getNode(fileId)
+    if (!fileInfo || fileInfo.type !== "file") {
       logger.warn("API", "File not found for download", { fileId })
       return NextResponse.json({ error: "File not found" }, { status: 404 })
     }
 
-    // Get file metadata
-    const fileInfo = await fileSystemProvider.getFileInfo(fileId)
-
     // Get file content
     const fileContent = await fileSystemProvider.getFileContent(fileId)
-    if (!fileContent) {
+    if (fileContent === null) {
       logger.error("API", "Failed to get file content for download", { fileId })
       return NextResponse.json({ error: "Failed to get file content" }, { status: 500 })
     }
@@ -70,7 +69,7 @@ export async function GET(request: NextRequest, { params }: { params: { fileId: 
       fileId,
       fileName: fileInfo.name,
       contentType,
-      contentLength: fileContent.length,
+      contentLength: typeof fileContent === "string" ? fileContent.length : fileContent.byteLength,
     })
 
     return response
